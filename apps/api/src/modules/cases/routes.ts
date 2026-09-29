@@ -13,6 +13,7 @@ import {
 import { ErrorResponse } from "../../lib/errors.js";
 import { createRouter, NotFound, Pagination, UuidParam, ValidationError } from "../../lib/http.js";
 import { CaseCreate, CasePatch, createCase, updateCase } from "./service.js";
+import { recomputeCaseStatus } from "./status.js";
 
 const Status = z.enum(caseStatus.enumValues);
 
@@ -186,6 +187,22 @@ const patchDef = createRoute({
   },
 });
 
+const autoStatusDef = createRoute({
+  method: "post",
+  path: "/cases/{id}/status/auto",
+  operationId: "resetCaseStatusToAutomatic",
+  tags: ["Vorgänge"],
+  summary: "Manuelle Statusvorgabe aufheben und Status aus Belegen/Zahlungen ableiten",
+  request: { params: UuidParam },
+  responses: {
+    200: { description: "Neu berechnet", content: { "application/json": { schema: CaseDetail } } },
+    404: {
+      description: "Nicht gefunden",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+  },
+});
+
 export const casesRouter = createRouter()
   .openapi(listRoute, async (c) => {
     const { status, measureCode, customerId, objectId, limit, offset } = c.req.valid("query");
@@ -219,6 +236,17 @@ export const casesRouter = createRouter()
     const db = c.get("db");
     const { id } = c.req.valid("param");
     await db.transaction((tx) => updateCase(tx, id, c.req.valid("json"), c.get("actor")));
+    return c.json((await loadCaseDetail(db, id)) as z.infer<typeof CaseDetail>, 200);
+  })
+  .openapi(autoStatusDef, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    const found = await loadCaseDetail(db, id);
+    if (!found) return c.json({ error: "not_found", message: "Vorgang nicht gefunden" }, 404);
+    await db.transaction(async (tx) => {
+      await tx.update(cases).set({ statusOverridden: false }).where(eq(cases.id, id));
+      await recomputeCaseStatus(tx, id, c.get("actor"));
+    });
     return c.json((await loadCaseDetail(db, id)) as z.infer<typeof CaseDetail>, 200);
   })
   .openapi(measureRoute, async (c) => {

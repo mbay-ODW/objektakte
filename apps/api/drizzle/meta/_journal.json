@@ -57,6 +57,13 @@
       "when": 1790711052619,
       "tag": "0007_begehungen",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790711594287,
+      "tag": "0008_bank_zahlungen",
+      "breakpoints": true
     }
   ]
 }

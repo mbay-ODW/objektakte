@@ -56,6 +56,7 @@ Schemaänderungen: `apps/api/src/db/schema.ts` anpassen, dann `pnpm --filter @ob
 - [Ereignisse und Webhooks](docs/webhooks.md)
 - [Kommunikation und Zuordnung](docs/kommunikation.md)
 - [Begehung vor Ort](docs/begehung.md)
+- [Zahlungen und Export](docs/zahlungen.md)
 
 ## Lizenz
 

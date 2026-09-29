@@ -16,6 +16,8 @@ import { inspectionsRouter } from "./modules/inspections/routes.js";
 import { createMcpHandler } from "./modules/mcp/server.js";
 import type { OpenApiDocument } from "./modules/mcp/tools.js";
 import { objectsRouter } from "./modules/objects/routes.js";
+import { paymentsRouter } from "./modules/payments/routes.js";
+import { reportsRouter } from "./modules/reports/routes.js";
 import { settingsRouter } from "./modules/settings/routes.js";
 import { webhooksRouter } from "./modules/webhooks/routes.js";
 
@@ -71,6 +73,8 @@ export function createApp({ db, apiToken, services }: AppOptions) {
   api.route("/", communicationsRouter);
   api.route("/", inspectionsRouter);
   api.route("/", documentsRouter);
+  api.route("/", paymentsRouter);
+  api.route("/", reportsRouter);
   api.route("/", settingsRouter);
   api.route("/", webhooksRouter);
   api.route("/", importRouter);

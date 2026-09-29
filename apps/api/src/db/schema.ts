@@ -693,3 +693,68 @@ export const inspectionMedia = pgTable(
     index("inspection_media_transcript_idx").on(t.transcriptStatus),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Bank und Zahlungen
+// ---------------------------------------------------------------------------
+
+export const bankTxStatus = pgEnum("bank_tx_status", [
+  "offen",
+  "zugeordnet",
+  "teilweise",
+  "ignoriert",
+]);
+
+export const bankTransactions = pgTable(
+  "bank_transactions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    /** Eigenes Konto (IBAN oder Bezeichnung). */
+    account: text("account").notNull(),
+    bookingDate: date("booking_date").notNull(),
+    valueDate: date("value_date"),
+    /** positiv = Eingang, negativ = Ausgang */
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+    currency: text("currency").notNull().default("EUR"),
+    counterpartyName: text("counterparty_name"),
+    counterpartyIban: text("counterparty_iban"),
+    purpose: text("purpose"),
+    /** End-to-End-Referenz o. Ä. */
+    reference: text("reference"),
+    /** ID aus der Quelle oder Hash der Umsatzdaten – verhindert Doppelimporte. */
+    dedupeKey: text("dedupe_key").notNull(),
+    status: bankTxStatus("status").notNull().default("offen"),
+    /** Zuordnungsvorschläge: [{ billingDocumentId, number, amountCents, score, reason }] */
+    suggestions: jsonb("suggestions").notNull().default([]),
+    note: text("note"),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    uniqueIndex("bank_transactions_dedupe_uq").on(t.account, t.dedupeKey),
+    index("bank_transactions_status_idx").on(t.status, t.bookingDate),
+  ],
+);
+
+export const allocationSource = pgEnum("allocation_source", ["automatisch", "manuell"]);
+
+export const paymentAllocations = pgTable(
+  "payment_allocations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    transactionId: uuid("transaction_id")
+      .notNull()
+      .references(() => bankTransactions.id, { onDelete: "cascade" }),
+    billingDocumentId: uuid("billing_document_id")
+      .notNull()
+      .references(() => billingDocuments.id, { onDelete: "restrict" }),
+    amountCents: bigint("amount_cents", { mode: "number" }).notNull(),
+    source: allocationSource("source").notNull(),
+    confidence: numeric("confidence", { precision: 4, scale: 3 }),
+    reason: text("reason"),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    uniqueIndex("payment_allocations_uq").on(t.transactionId, t.billingDocumentId),
+    index("payment_allocations_doc_idx").on(t.billingDocumentId),
+  ],
+);

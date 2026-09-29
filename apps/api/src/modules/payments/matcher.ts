@@ -26,6 +26,19 @@ export function compactNumber(s: string): string {
   return s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+/**
+ * Erkennt eine Belegnummer im Verwendungszweck – Trennzeichen zwischen den Bestandteilen sind
+ * beliebig („RE-2026-1“, „RE 2026 1“, „RE2026/1“), die Nummer muss aber an Wortgrenzen stehen:
+ * „RE-2026-17“ enthält nicht „RE-2026-1“, „RE-2026-1, 23 Euro“ nicht „RE-2026-123“.
+ */
+export function mentionsNumber(purpose: string, number: string): boolean {
+  const parts = number.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (parts.length === 0 || compactNumber(number).length < 4) return false;
+  const esc = (p: string) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const body = parts.map(esc).join("[^A-Za-z0-9]*");
+  return new RegExp(`(?<![A-Za-z0-9])${body}(?![A-Za-z0-9])`, "i").test(purpose);
+}
+
 function tokens(s: string): Set<string> {
   return new Set(
     s
@@ -62,11 +75,8 @@ export function nameSimilarity(a: string | null, b: string | null): number {
  */
 export function suggestAllocations(tx: TxInput, items: OpenItem[]): Suggestion[] {
   if (tx.amountCents <= 0) return [];
-  const purpose = compactNumber(tx.purpose ?? "");
-  const mentioned = items.filter((i) => {
-    const n = compactNumber(i.number);
-    return n.length >= 4 && purpose.includes(n);
-  });
+  const purpose = tx.purpose ?? "";
+  const mentioned = items.filter((i) => mentionsNumber(purpose, i.number));
 
   // Mehrere genannte Belege, deren offene Beträge zusammen exakt passen
   if (mentioned.length > 1) {

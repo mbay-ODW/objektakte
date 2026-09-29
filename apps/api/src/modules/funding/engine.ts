@@ -103,16 +103,17 @@ export async function syncDeadlines(tx: DbOrTx, fundingCaseId: string, actor: st
   for (const p of planned) {
     const current = byRule.get(p.ruleId);
     byRule.delete(p.ruleId);
-    // Regel-Erledigung hat Vorrang; entfällt der Erledigungsanker, wird wieder geöffnet.
-    // Manuell gesetzte Status (erledigt/verworfen) bleiben erhalten.
+    // Manuell gesetzte Status (erledigt/verworfen) bleiben erhalten. Sonst gilt die Regel:
+    // Erledigungsanker gesetzt → erledigt; entfällt er, wird eine regel-erledigte Frist wieder offen.
     let status: "offen" | "erledigt" | "verworfen" = current?.status ?? "offen";
     let completedAt = current?.completedAt ?? null;
     let completedByRule = current?.completedByRule ?? false;
-    if (p.doneAt) {
+    const manual = current !== undefined && current.status !== "offen" && !current.completedByRule;
+    if (!manual && p.doneAt) {
       status = "erledigt";
       completedAt = p.doneAt;
       completedByRule = true;
-    } else if (completedByRule) {
+    } else if (!manual && completedByRule) {
       status = "offen";
       completedAt = null;
       completedByRule = false;

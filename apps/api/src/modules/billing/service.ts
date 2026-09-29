@@ -35,6 +35,14 @@ type Company = SettingValue<"company">;
 type Doc = typeof billingDocuments.$inferSelect;
 type DocType = Doc["type"];
 
+export interface Deduction {
+  id: string | null;
+  label: string;
+  netCents: number;
+  taxCents: number;
+  grossCents: number;
+}
+
 export const DRAFT_TYPES = [
   "angebot",
   "auftragsbestaetigung",
@@ -96,7 +104,11 @@ const draftFields = {
   closing: z.string().nullish(),
   paymentTermsText: z.string().nullish(),
   eInvoiceFormat: z.enum(["zugferd", "xrechnung", "keine"]).optional(),
-  /** Nur Schlussrechnung: bereits berechnete Abschläge (brutto); leer = automatisch */
+  /** Befreiungsgründe (BT-120), z. B. { "E": "Steuerfrei nach § 4 Nr. … UStG" } */
+  exemptionReasons: z
+    .partialRecord(z.enum(["E", "Z", "AE", "O"]), z.string().trim().min(1))
+    .optional(),
+  /** Nur Schlussrechnung ohne erfasste Abschlagsrechnungen: bereits abgerechnete Abschläge (brutto) */
   prepaidCents: z.number().int().min(0).nullish(),
 };
 
@@ -444,7 +456,7 @@ async function storeFile(
     })
     .returning({ id: documents.id });
   if (!row) throw new Error("Datei konnte nicht registriert werden");
-  return { id: row.id, sha256 };
+  return { id: row.id, sha256, location: stored.location };
 }
 
 function metaRows(
@@ -486,7 +498,13 @@ async function prepareDocument(
   if (!company.name || !company.city)
     throw new DomainError(422, "Firmendaten unvollständig (Einstellungen „company“)");
   const buyer = await buyerParty(tx, doc.contactId);
-  const lines = await loadLines(tx, doc.id);
+  // § 19 UStG wird beim Aufbereiten erneut angewandt – auch wenn der Schalter erst nach dem
+  // Anlegen des Entwurfs umgestellt wurde (sonst würde Umsatzsteuer ausgewiesen, § 14c UStG).
+  const lines = (await loadLines(tx, doc.id)).map((l) =>
+    company.smallBusiness && l.taxCategory === "S"
+      ? { ...l, taxCategory: "E" as const, taxRatePercent: 0 }
+      : l,
+  );
   const issueDate = doc.issueDate ?? todayIso(now);
   const invoiceLike = isInvoiceKind(doc.type);
   const dueDate = doc.dueDate ?? (invoiceLike ? addDays(issueDate, company.paymentDays) : null);
@@ -497,20 +515,54 @@ async function prepareDocument(
         .where(eq(billingDocuments.id, doc.precedingDocumentId))
     : [];
 
-  // Schlussrechnung: bereits berechnete Abschläge abziehen
-  const notes: string[] = [];
-  let prepaid = doc.prepaidCents;
+  // Schlussrechnung: bereits berechnete Abschläge mit Entgelt und Steuer absetzen (§ 14 Abs. 5 UStG)
+  const de = (iso: string | null) => (iso ? iso.split("-").reverse().join(".") : "");
+  const euro = (c: number) =>
+    `${new Intl.NumberFormat("de-DE", { minimumFractionDigits: 2 }).format(c / 100)} €`;
+  let deductions: Deduction[] = [];
   if (doc.type === "schlussrechnung") {
     const partials = await priorPartialInvoices(tx, doc.caseId, doc.id);
-    if (prepaid === 0) prepaid = partials.reduce((s, p) => s + p.grossCents, 0);
     if (partials.length > 0) {
-      notes.push(
-        `Abzüglich bereits berechneter Abschlagsrechnungen: ${partials.map((p) => p.number).join(", ")}.`,
-      );
+      deductions = partials.map((p) => ({
+        id: p.id,
+        label: `Abschlagsrechnung ${p.number ?? ""} vom ${de(p.issueDate)}`,
+        netCents: p.netCents,
+        taxCents: p.taxCents,
+        grossCents: p.grossCents,
+      }));
+    } else if (doc.prepaidCents > 0) {
+      // Abschläge ohne erfassten Beleg: Aufteilung im Verhältnis der Schlussrechnung
+      const t = computeTotals({ lines, prepaidCents: 0, exemptionReasons: {} });
+      const net =
+        t.grandTotalCents === 0
+          ? doc.prepaidCents
+          : Math.round((doc.prepaidCents * t.lineTotalCents) / t.grandTotalCents);
+      deductions = [
+        {
+          id: null,
+          label: "bereits geleistete Abschläge",
+          netCents: net,
+          taxCents: doc.prepaidCents - net,
+          grossCents: doc.prepaidCents,
+        },
+      ];
     }
+  } else if (doc.type === "stornorechnung") {
+    deductions = (doc.deductions as Deduction[]) ?? [];
   }
+  const prepaid = deductions.reduce((s, d) => s + d.grossCents, 0);
+  const prepaidNet = deductions.reduce((s, d) => s + d.netCents, 0);
+  const prepaidTax = deductions.reduce((s, d) => s + d.taxCents, 0);
+  const notes = deductions.map(
+    (d) =>
+      `Abzüglich ${d.label}: Entgelt ${euro(d.netCents)}, Umsatzsteuer ${euro(d.taxCents)}, brutto ${euro(d.grossCents)}.`,
+  );
 
-  const reasons = exemptionReasons(company, lines);
+  const reasons = exemptionReasons(
+    company,
+    lines,
+    doc.exemptionReasons as Partial<Record<TaxCategory, string>>,
+  );
   const termsText =
     doc.paymentTermsText ??
     (invoiceLike && dueDate
@@ -588,9 +640,9 @@ async function prepareDocument(
       .join("\n"),
     lines,
     prepaidCents: prepaid,
+    deductions,
     exemptionReasons: reasons,
     closing: [
-      ...notes,
       ...(doc.type === "stornorechnung" && preceding?.number
         ? [`Diese Stornorechnung hebt die Rechnung ${preceding.number} vollständig auf.`]
         : []),
@@ -623,6 +675,10 @@ async function prepareDocument(
     buyerReference,
     termsText,
     prepaid,
+    prepaidNet,
+    prepaidTax,
+    deductions,
+    lines,
     preceding: preceding ?? null,
     violations,
   };
@@ -656,9 +712,14 @@ export interface FinalizeResult {
 }
 
 /**
- * Schreibt einen Entwurf fest: Nummer vergeben, E-Rechnung erzeugen und prüfen, PDF/A-3 erzeugen,
- * Dateien ablegen, Inhalts-Hash speichern. Schlägt eine Prüfung fehl, wird alles zurückgerollt –
- * auch die Nummer, sodass der Nummernkreis lückenlos bleibt.
+ * Schreibt einen Entwurf fest.
+ *
+ * 1. Aufbereiten und extern prüfen – ohne Sperren, mit Prüfnummer. So blockiert ein langsamer
+ *    Validator nicht den Nummernkreis.
+ * 2. Kurze Transaktion: Entwurf sperren (und auf zwischenzeitliche Änderungen prüfen), Nummer
+ *    vergeben, endgültig erzeugen (identischer Inhalt, nur Nummer/Referenz), ablegen, festschreiben.
+ * Scheitert Schritt 2, wird alles zurückgerollt – auch die Nummer – und bereits abgelegte Dateien
+ * werden wieder entfernt, damit keine zweite Datei mit derselben Nummer entsteht.
  */
 export async function finalizeDocument(
   db: Database,
@@ -668,133 +729,206 @@ export async function finalizeDocument(
   opts: { now?: Date } = {},
 ): Promise<FinalizeResult> {
   const now = opts.now ?? new Date();
-  const result = await db.transaction(async (tx) => {
-    let doc = await lockDraft(tx, id);
-    const company = await getSetting(tx, "company");
-    const seq = await nextNumber(tx, `beleg:${sequenceKeyFor(doc.type)}`);
-    const issueDateForNumber = doc.issueDate ?? todayIso(now);
-    const number = formatNumber(
-      company.numberPatterns[sequenceKeyFor(doc.type)],
-      issueDateForNumber,
-      seq.padded,
-    );
-    const prep = await prepareDocument(tx, doc, company, now, number);
-    const {
-      canonical,
-      totals,
-      profile,
-      xml,
-      pdf,
-      format,
-      issueDate,
-      dueDate,
-      buyer,
-      buyerReference,
-      termsText,
-      prepaid,
-      preceding,
-    } = prep;
-    const validation: FinalizeResult["validation"] = {
-      mode: services.eInvoiceValidation,
-      valid: true,
-      errors: [],
-      warnings: [],
-      validator: null,
-    };
-    if (profile) {
-      if (services.validator) {
-        // ZUGFeRD: das komplette PDF prüfen (PDF/A-3 + XML), XRechnung: die XML-Datei
-        const r = await services.validator.validate(
-          profile === "en16931" ? pdf : new TextEncoder().encode(xml ?? ""),
+  const [draft] = await db.select().from(billingDocuments).where(eq(billingDocuments.id, id));
+  if (!draft) throw new DomainError(404, "Beleg nicht gefunden");
+  if (draft.source !== "nativ" || draft.status !== "entwurf") {
+    throw new DomainError(409, "Nur Entwürfe können festgeschrieben werden");
+  }
+  const company = await getSetting(db, "company");
+  const probe = await prepareDocument(db, draft, company, now, `PRUEFUNG-${id.slice(0, 8)}`);
+
+  const validation: FinalizeResult["validation"] = {
+    mode: services.eInvoiceValidation,
+    valid: true,
+    errors: [],
+    warnings: [],
+    validator: null,
+  };
+  if (probe.profile) {
+    if (services.validator) {
+      // ZUGFeRD: das komplette PDF prüfen (PDF/A-3 + XML), XRechnung: die XML-Datei
+      let r: Awaited<ReturnType<typeof services.validator.validate>>;
+      try {
+        r = await services.validator.validate(
+          probe.profile === "en16931" ? probe.pdf : new TextEncoder().encode(probe.xml ?? ""),
         );
-        Object.assign(validation, r, { validator: r.validator });
-        if (!r.valid) {
-          throw new DomainError(422, `E-Rechnung ungültig: ${r.errors.slice(0, 5).join(" | ")}`);
-        }
-      } else if (services.eInvoiceValidation === "required") {
+      } catch (err) {
         throw new DomainError(
-          422,
-          "Kein E-Rechnungs-Validator konfiguriert (EINVOICE_VALIDATOR_URL)",
+          503,
+          `E-Rechnungs-Validator nicht erreichbar: ${err instanceof Error ? err.message : String(err)}`,
         );
-      } else {
-        validation.warnings.push("Nur interne Vorprüfung – kein externer Validator konfiguriert");
       }
+      Object.assign(validation, r, { validator: r.validator });
+      if (!r.valid) {
+        throw new DomainError(422, `E-Rechnung ungültig: ${r.errors.slice(0, 5).join(" | ")}`);
+      }
+    } else if (services.eInvoiceValidation === "required") {
+      throw new DomainError(
+        422,
+        "Kein E-Rechnungs-Validator konfiguriert (EINVOICE_VALIDATOR_URL)",
+      );
+    } else {
+      validation.warnings.push("Nur interne Vorprüfung – kein externer Validator konfiguriert");
     }
+  }
 
-    doc = { ...doc, issueDate };
-    const pdfFile = await storeFile(
-      tx,
-      services,
-      doc,
-      `${number}.pdf`,
-      pdf,
-      "application/pdf",
-      TITLES[doc.type].toLowerCase(),
-    );
-    const xmlFile =
-      profile === "xrechnung" && xml
-        ? await storeFile(
-            tx,
-            services,
-            doc,
-            `${number}.xml`,
-            new TextEncoder().encode(xml),
-            "application/xml",
-            "xrechnung",
-          )
-        : null;
-    const xmlSha = xml ? createHash("sha256").update(xml).digest("hex") : null;
-    const contentHash = createHash("sha256")
-      .update(JSON.stringify({ canonical, pdf: pdfFile.sha256, xml: xmlSha }))
-      .digest("hex");
-
-    await tx
-      .update(billingDocuments)
-      .set({
-        number,
+  const stored: string[] = [];
+  try {
+    return await db.transaction(async (tx) => {
+      const doc = await lockDraft(tx, id);
+      const companyNow = await getSetting(tx, "company");
+      if (
+        doc.updatedAt.getTime() !== draft.updatedAt.getTime() ||
+        JSON.stringify(companyNow) !== JSON.stringify(company)
+      ) {
+        throw new DomainError(
+          409,
+          "Entwurf oder Firmendaten wurden während der Prüfung geändert – bitte erneut festschreiben",
+        );
+      }
+      if (doc.type === "stornorechnung" && doc.precedingDocumentId) {
+        await tx.execute(
+          sql`SELECT id FROM billing_documents WHERE id = ${doc.precedingDocumentId} FOR UPDATE`,
+        );
+        const [orig] = await tx
+          .select()
+          .from(billingDocuments)
+          .where(eq(billingDocuments.id, doc.precedingDocumentId));
+        if (!orig || !["festgeschrieben", "versendet"].includes(orig.status)) {
+          throw new DomainError(409, "Die Rechnung ist bereits storniert");
+        }
+      }
+      const key = sequenceKeyFor(doc.type);
+      const seq = await nextNumber(tx, `beleg:${key}`);
+      const number = formatNumber(
+        company.numberPatterns[key],
+        doc.issueDate ?? todayIso(now),
+        seq.padded,
+      );
+      const prep = await prepareDocument(tx, doc, company, now, number);
+      if (
+        prep.totals.grandTotalCents !== probe.totals.grandTotalCents ||
+        Boolean(prep.xml) !== Boolean(probe.xml)
+      ) {
+        throw new Error("Endgültiger Beleg weicht von der geprüften Fassung ab");
+      }
+      const {
+        canonical,
+        totals,
+        profile,
+        xml,
+        pdf,
+        format,
         issueDate,
         dueDate,
+        buyer,
         buyerReference,
-        paymentTermsText: termsText,
-        prepaidCents: prepaid,
-        netCents: totals.lineTotalCents,
-        taxCents: totals.taxCents,
-        grossCents: totals.grandTotalCents,
-        status: "festgeschrieben",
-        finalizedAt: now,
-        contentHash,
-        sellerSnapshot: canonical.seller,
-        buyerSnapshot: buyer,
-        pdfDocumentId: pdfFile.id,
-        xmlDocumentId: xmlFile?.id ?? null,
-        validation,
-      })
-      .where(eq(billingDocuments.id, id));
-    if (doc.type === "stornorechnung" && preceding) {
+        termsText,
+        preceding,
+      } = prep;
+
+      // Positionen in der festgeschriebenen Form sichern (z. B. nach Anwendung von § 19 UStG)
+      await saveLines(tx, id, prep.lines, company);
+
+      const docForFiles = { ...doc, issueDate };
+      const pdfFile = await storeFile(
+        tx,
+        services,
+        docForFiles,
+        `${number}.pdf`,
+        pdf,
+        "application/pdf",
+        TITLES[doc.type].toLowerCase(),
+      );
+      stored.push(pdfFile.location);
+      let xmlFile: Awaited<ReturnType<typeof storeFile>> | null = null;
+      if (profile === "xrechnung" && xml) {
+        xmlFile = await storeFile(
+          tx,
+          services,
+          docForFiles,
+          `${number}.xml`,
+          new TextEncoder().encode(xml),
+          "application/xml",
+          "xrechnung",
+        );
+        stored.push(xmlFile.location);
+      }
+      const xmlSha = xml ? createHash("sha256").update(xml).digest("hex") : null;
+      const contentHash = createHash("sha256")
+        .update(JSON.stringify({ canonical, pdf: pdfFile.sha256, xml: xmlSha }))
+        .digest("hex");
+
       await tx
         .update(billingDocuments)
-        .set({ status: "storniert" })
-        .where(eq(billingDocuments.id, preceding.id));
-    }
-    await recordEvents(tx, [
-      {
-        entityType: "billing_document",
-        entityId: id,
-        type: "billing_document.finalized",
-        actor,
-        payload: {
+        .set({
           number,
-          type: doc.type,
+          issueDate,
+          dueDate,
+          buyerReference,
+          paymentTermsText: termsText,
+          prepaidCents: prep.prepaid,
+          prepaidNetCents: prep.prepaidNet,
+          prepaidTaxCents: prep.prepaidTax,
+          deductions: prep.deductions,
+          netCents: totals.lineTotalCents,
+          taxCents: totals.taxCents,
           grossCents: totals.grandTotalCents,
+          status: "festgeschrieben",
+          finalizedAt: now,
           contentHash,
-          format,
+          sellerSnapshot: canonical.seller,
+          buyerSnapshot: buyer,
+          pdfDocumentId: pdfFile.id,
+          xmlDocumentId: xmlFile?.id ?? null,
+          validation,
+        })
+        .where(eq(billingDocuments.id, id));
+      if (doc.type === "stornorechnung" && preceding) {
+        await tx
+          .update(billingDocuments)
+          .set({ status: "storniert" })
+          .where(eq(billingDocuments.id, preceding.id));
+      }
+      await recordEvents(tx, [
+        {
+          entityType: "billing_document",
+          entityId: id,
+          type: "billing_document.finalized",
+          actor,
+          payload: {
+            number,
+            type: doc.type,
+            grossCents: totals.grandTotalCents,
+            contentHash,
+            format,
+          },
         },
-      },
-    ]);
-    if (doc.caseId) await recomputeCaseStatus(tx, doc.caseId, actor);
-    return { number, pdfDocumentId: pdfFile.id, xmlDocumentId: xmlFile?.id ?? null, validation };
-  });
-  return result;
+      ]);
+      if (doc.caseId) await recomputeCaseStatus(tx, doc.caseId, actor);
+      return { number, pdfDocumentId: pdfFile.id, xmlDocumentId: xmlFile?.id ?? null, validation };
+    });
+  } catch (err) {
+    for (const location of stored) await services.storage.delete(location).catch(() => undefined);
+    throw numberConflict(err) ?? err;
+  }
+}
+
+/** Eindeutigkeitskonflikt der Belegnummer (z. B. importierte Nummer liegt vor dem Nummernkreis). */
+function numberConflict(err: unknown): DomainError | undefined {
+  const e = (err as { cause?: unknown })?.cause ?? err;
+  if (e && typeof e === "object" && "constraint_name" in e) {
+    if (e.constraint_name === "billing_documents_number_uq") {
+      return new DomainError(
+        409,
+        "Belegnummer bereits vergeben (z. B. aus einem Import). Bitte den Nummernkreis unter /number-sequences erhöhen.",
+      );
+    }
+    if (e.constraint_name === "billing_documents_one_storno_uq") {
+      return new DomainError(409, "Die Rechnung ist bereits storniert");
+    }
+  }
+  return undefined;
 }
 
 async function caseNumber(tx: DbOrTx, caseId: string | null) {
@@ -822,8 +956,30 @@ function defaultClosing(company: Company, type: DocType) {
 /** Storniert eine festgeschriebene Rechnung durch eine Stornorechnung (Kopie der Positionen). */
 export async function cancelInvoice(db: Database, services: Services, id: string, actor: string) {
   const stornoId = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT id FROM billing_documents WHERE id = ${id} FOR UPDATE`);
     const [orig] = await tx.select().from(billingDocuments).where(eq(billingDocuments.id, id));
     if (!orig) throw new DomainError(404, "Beleg nicht gefunden");
+    if (orig.type === "abschlagsrechnung" && orig.caseId) {
+      const finals = await tx
+        .select({ number: billingDocuments.number, deductions: billingDocuments.deductions })
+        .from(billingDocuments)
+        .where(
+          and(
+            eq(billingDocuments.caseId, orig.caseId),
+            eq(billingDocuments.type, "schlussrechnung"),
+            inArray(billingDocuments.status, ["festgeschrieben", "versendet"]),
+          ),
+        );
+      const deducting = finals.find((f) =>
+        (f.deductions as Deduction[]).some((d) => d.id === orig.id),
+      );
+      if (deducting) {
+        throw new DomainError(
+          409,
+          `Die Abschlagsrechnung wurde in der Schlussrechnung ${deducting.number} abgezogen – zuerst die Schlussrechnung stornieren`,
+        );
+      }
+    }
     if (orig.source !== "nativ" || !isInvoiceKind(orig.type) || orig.type === "stornorechnung") {
       throw new DomainError(422, "Nur eigene Rechnungen können storniert werden");
     }
@@ -849,6 +1005,10 @@ export async function cancelInvoice(db: Database, services: Services, id: string
         servicePeriodStart: orig.servicePeriodStart,
         servicePeriodEnd: orig.servicePeriodEnd,
         eInvoiceFormat: orig.eInvoiceFormat,
+        exemptionReasons: orig.exemptionReasons,
+        // Storno einer Schlussrechnung hebt nur den dort verbliebenen Betrag auf
+        prepaidCents: orig.prepaidCents,
+        deductions: orig.deductions,
         paymentTermsText: "Der Betrag wird verrechnet bzw. erstattet.",
       })
       .returning({ id: billingDocuments.id });
@@ -895,6 +1055,9 @@ export async function convertDocument(
 ) {
   const [src] = await tx.select().from(billingDocuments).where(eq(billingDocuments.id, id));
   if (!src) throw new DomainError(404, "Beleg nicht gefunden");
+  if (src.type !== "angebot" && src.type !== "auftragsbestaetigung") {
+    throw new DomainError(422, "Übernahme nur aus Angeboten und Auftragsbestätigungen");
+  }
   const lines = await loadLines(tx, id);
   const newId = await createDraft(
     tx,
@@ -986,8 +1149,13 @@ export async function createReminder(
       .where(eq(billingDocuments.id, draftId));
     return draftId;
   });
-  const r = await finalizeDocument(db, services, id, actor);
-  return { id, ...r };
+  try {
+    const r = await finalizeDocument(db, services, id, actor);
+    return { id, ...r };
+  } catch (err) {
+    await db.transaction((tx) => deleteDraft(tx, id, actor)).catch(() => undefined);
+    throw err;
+  }
 }
 
 export async function markSent(tx: DbOrTx, id: string, via: string, actor: string) {

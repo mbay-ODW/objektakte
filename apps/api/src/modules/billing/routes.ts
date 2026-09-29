@@ -642,7 +642,7 @@ export const billingRouter = createRouter()
   })
   .openapi(companyGet, async (c) => c.json(await getSetting(c.get("db"), "company"), 200))
   .openapi(companyPut, async (c) =>
-    c.json(await putSetting(c.get("db"), "company", c.req.valid("json")), 200),
+    c.json(await putSetting(c.get("db"), "company", c.req.valid("json"), c.get("actor")), 200),
   )
   .openapi(uploadIncoming, async (c) => {
     const db = c.get("db");
@@ -719,12 +719,26 @@ export const billingRouter = createRouter()
     return c.json({ items: rows.map(toIncoming) }, 200);
   })
   .openapi(patchIncoming, async (c) => {
-    const [row] = await c
-      .get("db")
-      .update(incomingInvoices)
-      .set({ status: c.req.valid("json").status })
-      .where(eq(incomingInvoices.id, c.req.valid("param").id))
-      .returning();
-    if (!row) throw new DomainError(404, "Eingangsrechnung nicht gefunden");
+    const { id } = c.req.valid("param");
+    const { status } = c.req.valid("json");
+    const row = await c.get("db").transaction(async (tx) => {
+      const [before] = await tx.select().from(incomingInvoices).where(eq(incomingInvoices.id, id));
+      if (!before) throw new DomainError(404, "Eingangsrechnung nicht gefunden");
+      const [updated] = await tx
+        .update(incomingInvoices)
+        .set({ status })
+        .where(eq(incomingInvoices.id, id))
+        .returning();
+      await recordEvents(tx, [
+        {
+          entityType: "incoming_invoice",
+          entityId: id,
+          type: "incoming_invoice.status_changed",
+          actor: c.get("actor"),
+          payload: { from: before.status, to: status },
+        },
+      ]);
+      return must(updated, "Eingangsrechnung");
+    });
     return c.json(toIncoming(row), 200);
   });

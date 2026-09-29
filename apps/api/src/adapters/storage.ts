@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, normalize, sep } from "node:path";
 
 export interface StoredFile {
@@ -11,6 +11,8 @@ export interface FileStorage {
   readonly kind: "nextcloud" | "local";
   put(path: string, bytes: Uint8Array, mimeType: string): Promise<StoredFile>;
   get(location: string): Promise<Uint8Array>;
+  /** Entfernt eine Datei (nur für das Aufräumen fehlgeschlagener Vorgänge). */
+  delete(location: string): Promise<void>;
 }
 
 function safeRelative(path: string): string {
@@ -37,6 +39,10 @@ export class LocalStorage implements FileStorage {
   async get(location: string): Promise<Uint8Array> {
     return new Uint8Array(await readFile(join(this.root, safeRelative(location))));
   }
+
+  async delete(location: string): Promise<void> {
+    await rm(join(this.root, safeRelative(location)), { force: true });
+  }
 }
 
 /** Nextcloud (oder jeder andere WebDAV-Server) mit App-Passwort. */
@@ -50,6 +56,7 @@ export class WebDavStorage implements FileStorage {
     user: string,
     password: string,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly timeoutMs = 30_000,
   ) {
     this.auth = `Basic ${Buffer.from(`${user}:${password}`).toString("base64")}`;
   }
@@ -68,6 +75,7 @@ export class WebDavStorage implements FileStorage {
       const res = await this.fetchImpl(this.url(parts.slice(0, i).join("/")), {
         method: "MKCOL",
         headers: { authorization: this.auth },
+        signal: AbortSignal.timeout(this.timeoutMs),
       });
       // 201 angelegt, 405 existiert bereits
       if (!res.ok && res.status !== 405) throw new Error(`WebDAV MKCOL ${res.status}`);
@@ -80,14 +88,27 @@ export class WebDavStorage implements FileStorage {
       method: "PUT",
       headers: { authorization: this.auth, "content-type": mimeType },
       body: Buffer.from(bytes),
+      signal: AbortSignal.timeout(this.timeoutMs),
     });
     if (!res.ok) throw new Error(`WebDAV PUT ${res.status}`);
     return { storage: "nextcloud", location: `/${safeRelative(path).split(sep).join("/")}` };
   }
 
   async get(location: string): Promise<Uint8Array> {
-    const res = await this.fetchImpl(this.url(location), { headers: { authorization: this.auth } });
+    const res = await this.fetchImpl(this.url(location), {
+      headers: { authorization: this.auth },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
     if (!res.ok) throw new Error(`WebDAV GET ${res.status}`);
     return new Uint8Array(await res.arrayBuffer());
+  }
+
+  async delete(location: string): Promise<void> {
+    const res = await this.fetchImpl(this.url(location), {
+      method: "DELETE",
+      headers: { authorization: this.auth },
+      signal: AbortSignal.timeout(this.timeoutMs),
+    });
+    if (!res.ok && res.status !== 404) throw new Error(`WebDAV DELETE ${res.status}`);
   }
 }

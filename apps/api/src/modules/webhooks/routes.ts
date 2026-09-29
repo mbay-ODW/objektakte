@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { createRoute, z } from "@hono/zod-openapi";
-import { and, asc, desc, eq, gt, inArray, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { events, webhookSubscriptions } from "../../db/schema.js";
 import { ErrorResponse } from "../../lib/errors.js";
+import { settledAfter } from "../../lib/events.js";
 import { createRouter, UuidParam, ValidationError } from "../../lib/http.js";
 
 const json = <T extends z.ZodType>(schema: T) => ({ "application/json": { schema } });
@@ -206,7 +207,7 @@ export const webhooksRouter = createRouter()
   })
   .openapi(feed, async (c) => {
     const { after, limit, entityId, types } = c.req.valid("query");
-    const filters: SQL[] = [gt(events.id, after)];
+    const filters: SQL[] = [settledAfter(after)];
     if (entityId) filters.push(eq(events.entityId, entityId));
     const typeList = types
       ?.split(",")

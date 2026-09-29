@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { bearerAuth } from "hono/bearer-auth";
+import { bodyLimit } from "hono/body-limit";
 import { HTTPException } from "hono/http-exception";
 import type { Services } from "./adapters/index.js";
 import type { Database } from "./db/client.js";
@@ -60,6 +61,15 @@ export function createApp({ db, apiToken, services }: AppOptions) {
       invalidToken: { message: { error: "unauthorized" } },
     }),
   );
+  // Größenbegrenzung schon beim Einlesen (nicht erst nach dem Puffern)
+  const limit = (mb: number) =>
+    bodyLimit({
+      maxSize: mb * 1024 * 1024,
+      onError: (c) => c.json({ error: "payload_too_large", message: `Maximal ${mb} MB` }, 413),
+    });
+  api.use("/incoming-invoices", limit(25));
+  api.use("/bank/transactions/import-csv", limit(10));
+  api.use("*", limit(65));
   api.use("*", async (c, next) => {
     c.set("db", db);
     c.set("services", services);

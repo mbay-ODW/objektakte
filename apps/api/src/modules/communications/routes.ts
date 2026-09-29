@@ -10,7 +10,7 @@ import {
   fundingCases,
 } from "../../db/schema.js";
 import { ErrorResponse, must } from "../../lib/errors.js";
-import { createRouter, UuidParam, ValidationError } from "../../lib/http.js";
+import { createRouter, queryBool, UuidParam, ValidationError } from "../../lib/http.js";
 import { getSetting, putSetting, settingSchemas } from "../../lib/settings.js";
 import {
   AssignInput,
@@ -156,7 +156,7 @@ const inbox = createRoute({
   operationId: "communicationInbox",
   tags: ["Kommunikation"],
   summary: "Zuordnungs-Inbox: offene sowie automatisch zugeordnete, noch unbestätigte Nachrichten",
-  request: { query: z.object({ includeAutomatic: z.coerce.boolean().default(true) }) },
+  request: { query: z.object({ includeAutomatic: queryBool(true) }) },
   responses: {
     200: {
       description: "Inbox",
@@ -425,7 +425,10 @@ export const communicationsRouter = createRouter()
   })
   .openapi(getSettings, async (c) => c.json(await getSetting(c.get("db"), "communication"), 200))
   .openapi(putSettings, async (c) =>
-    c.json(await putSetting(c.get("db"), "communication", c.req.valid("json")), 200),
+    c.json(
+      await putSetting(c.get("db"), "communication", c.req.valid("json"), c.get("actor")),
+      200,
+    ),
   );
 
 function summarize(payload: unknown): string | null {

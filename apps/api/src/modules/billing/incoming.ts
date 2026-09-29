@@ -3,9 +3,9 @@
  * PDF mit eingebetteter XML. Es werden die für Prüfung, Zahlung und Buchhaltung nötigen Kopfdaten
  * übernommen; die Originaldatei bleibt maßgeblich.
  */
+import { inflateSync } from "node:zlib";
 import { XMLParser } from "fast-xml-parser";
 import {
-  decodePDFRawStream,
   PDFArray,
   PDFDict,
   PDFDocument,
@@ -161,8 +161,11 @@ export async function extractXmlFromPdf(pdf: Uint8Array): Promise<string> {
   const names = doc.catalog.lookupMaybe(PDFName.of("Names"), PDFDict);
   const tree = names?.lookupMaybe(PDFName.of("EmbeddedFiles"), PDFDict);
   const files: { name: string; spec: PDFDict }[] = [];
-  const walk = (node: PDFDict | undefined) => {
-    if (!node) return;
+  // Namensbaum mit Tiefen- und Zyklusschutz durchlaufen (Eingaben sind nicht vertrauenswürdig)
+  const seen = new Set<PDFDict>();
+  const walk = (node: PDFDict | undefined, depth = 0) => {
+    if (!node || depth > 10 || seen.has(node) || files.length > 50) return;
+    seen.add(node);
     const arr = node.lookupMaybe(PDFName.of("Names"), PDFArray);
     if (arr) {
       for (let i = 0; i + 1 < arr.size(); i += 2) {
@@ -174,7 +177,12 @@ export async function extractXmlFromPdf(pdf: Uint8Array): Promise<string> {
       }
     }
     const kids = node.lookupMaybe(PDFName.of("Kids"), PDFArray);
-    if (kids) for (let i = 0; i < kids.size(); i++) walk(kids.lookup(i) as PDFDict);
+    if (kids) {
+      for (let i = 0; i < kids.size(); i++) {
+        const kid = kids.lookup(i);
+        if (kid instanceof PDFDict) walk(kid, depth + 1);
+      }
+    }
   };
   walk(tree);
   const match =
@@ -184,7 +192,30 @@ export async function extractXmlFromPdf(pdf: Uint8Array): Promise<string> {
   const ef = match.spec.lookupMaybe(PDFName.of("EF"), PDFDict);
   const stream = ef?.lookup(PDFName.of("F"));
   if (!(stream instanceof PDFRawStream)) throw new Error("Eingebettete Datei nicht lesbar");
-  return new TextDecoder().decode(decodePDFRawStream(stream).decode());
+  return new TextDecoder().decode(inflateEmbedded(stream));
+}
+
+/** Höchstgröße einer eingebetteten Rechnungs-XML nach dem Entpacken (Schutz vor Zip-Bomben). */
+export const MAX_EMBEDDED_XML_BYTES = 5 * 1024 * 1024;
+
+function inflateEmbedded(stream: PDFRawStream): Uint8Array {
+  const filter = stream.dict.lookup(PDFName.of("Filter"));
+  const raw = stream.getContents();
+  if (filter === undefined) {
+    if (raw.length > MAX_EMBEDDED_XML_BYTES) throw new Error("Eingebettete Datei zu groß");
+    return raw;
+  }
+  const name = filter instanceof PDFArray && filter.size() === 1 ? filter.lookup(0) : filter;
+  if (name !== PDFName.of("FlateDecode")) throw new Error("Nicht unterstützte Komprimierung");
+  try {
+    return inflateSync(raw, { maxOutputLength: MAX_EMBEDDED_XML_BYTES });
+  } catch (err) {
+    throw new Error(
+      (err as { code?: string }).code === "ERR_BUFFER_TOO_LARGE"
+        ? "Eingebettete Datei zu groß"
+        : "Eingebettete Datei nicht lesbar",
+    );
+  }
 }
 
 export async function parseIncomingFile(

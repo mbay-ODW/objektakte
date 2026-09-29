@@ -2,6 +2,7 @@ import { z } from "@hono/zod-openapi";
 import { eq } from "drizzle-orm";
 import type { DbOrTx } from "../db/client.js";
 import { appSettings } from "../db/schema.js";
+import { recordEvents, settingEntityId } from "./events.js";
 
 /** Bekannte Einstellungsbereiche mit Schema und Standardwerten. */
 export const settingSchemas = {
@@ -147,10 +148,11 @@ export const settingSchemas = {
       revenueAccounts: z
         .object({
           standard: z.number().int().default(8400),
+          reduced: z.number().int().default(8300),
           reverseCharge: z.number().int().default(8337),
           exempt: z.number().int().default(8100),
         })
-        .default({ standard: 8400, reverseCharge: 8337, exempt: 8100 }),
+        .default({ standard: 8400, reduced: 8300, reverseCharge: 8337, exempt: 8100 }),
     })
     .openapi("DatevSettings"),
 } as const;
@@ -170,11 +172,23 @@ export async function putSetting<K extends SettingKey>(
   db: DbOrTx,
   key: K,
   value: unknown,
+  actor = "system",
 ): Promise<SettingValue<K>> {
   const parsed = settingSchemas[key].parse(value) as SettingValue<K>;
+  const before = await getSetting(db, key);
   await db
     .insert(appSettings)
     .values({ key, value: parsed })
     .onConflictDoUpdate({ target: appSettings.key, set: { value: parsed } });
+  // Einstellungen (z. B. Firmendaten, § 19 UStG) wirken auf Belege → nachvollziehbar protokollieren
+  await recordEvents(db, [
+    {
+      entityType: "setting",
+      entityId: settingEntityId(key),
+      type: "setting.updated",
+      actor,
+      payload: { key, before, after: parsed },
+    },
+  ]);
   return parsed;
 }

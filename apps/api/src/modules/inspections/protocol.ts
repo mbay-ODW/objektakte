@@ -43,7 +43,7 @@ export function renderProtocolHtml({ detail, object, caseNumber, images }: Proto
       .filter((m) => m.kind === "foto" && images.has(m.id))
       .map(
         (m) =>
-          `<figure><img src="${images.get(m.id)}" alt=""><figcaption>${esc(m.caption ?? "")}</figcaption></figure>`,
+          `<figure><img src="${esc(images.get(m.id))}" alt=""><figcaption>${esc(m.caption ?? "")}</figcaption></figure>`,
       )
       .join("");
     const notes = list

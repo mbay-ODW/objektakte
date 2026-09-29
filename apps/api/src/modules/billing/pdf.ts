@@ -46,6 +46,8 @@ export interface DocumentView {
   intro: string | null;
   lines: Line[];
   prepaidCents: number;
+  /** Abgesetzte Abschläge mit Entgelt und Steuer (Schlussrechnung, § 14 Abs. 5 UStG) */
+  deductions?: { label: string; netCents: number; taxCents: number; grossCents: number }[];
   exemptionReasons: Partial<Record<TaxCategory, string>>;
   /** Texte unter der Summe (Zahlungsbedingungen, Hinweise) */
   closing: string[];
@@ -388,11 +390,21 @@ export async function renderDocumentPdf(view: DocumentView): Promise<Uint8Array>
     ]);
   }
   if (totals.prepaidCents !== 0) {
-    sumRows.push([
-      "abzüglich bereits berechneter Abschläge",
-      `- ${euro(totals.prepaidCents)}`,
-      false,
-    ]);
+    const deductions = view.deductions?.length
+      ? view.deductions
+      : [
+          {
+            label: "bereits berechnete Abschläge",
+            netCents: 0,
+            taxCents: 0,
+            grossCents: totals.prepaidCents,
+          },
+        ];
+    for (const d of deductions) {
+      const detail =
+        d.netCents || d.taxCents ? ` (Entgelt ${euro(d.netCents)}, USt ${euro(d.taxCents)})` : "";
+      sumRows.push([`abzüglich ${d.label}${detail}`, `- ${euro(d.grossCents)}`, false]);
+    }
     sumRows.push(["Zahlbetrag", euro(totals.duePayableCents), true]);
   }
   ensure(ctx, sumRows.length * 13 + 10);

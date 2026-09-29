@@ -50,6 +50,7 @@ export async function loadReceivables(db: DbOrTx) {
       issueDate: billingDocuments.issueDate,
       dueDate: billingDocuments.dueDate,
       grossCents: billingDocuments.grossCents,
+      prepaidCents: billingDocuments.prepaidCents,
       paidCents: paidExpr,
       contactId: billingDocuments.contactId,
       contactName: contacts.displayName,
@@ -68,7 +69,8 @@ export async function loadReceivables(db: DbOrTx) {
   return rows
     .map((r) => {
       const paid = Number(r.paidCents);
-      return { ...r, paidCents: paid, openCents: r.grossCents - paid };
+      // Forderung = Rechnungsbetrag abzüglich bereits abgerechneter Abschläge (Schlussrechnung)
+      return { ...r, paidCents: paid, openCents: r.grossCents - r.prepaidCents - paid };
     })
     .filter((r) => r.openCents > 0);
 }
@@ -183,11 +185,23 @@ export async function applyAllocations(
   source: "automatisch" | "manuell",
   actor: string,
 ) {
+  // Umsatz sperren: parallele Zuordnungen (manuell/Abgleich) auf denselben Umsatz serialisieren
+  const [locked] = await tx.execute<{ id: string }>(
+    sql`SELECT id FROM bank_transactions WHERE id = ${transactionId} FOR UPDATE`,
+  );
+  if (!locked) throw new DomainError(404, "Umsatz nicht gefunden");
   const [t] = await tx
     .select()
     .from(bankTransactions)
     .where(eq(bankTransactions.id, transactionId));
   if (!t) throw new DomainError(404, "Umsatz nicht gefunden");
+  if (allocations.length > 0 && t.amountCents <= 0) {
+    throw new DomainError(422, "Nur Zahlungseingänge können Rechnungen zugeordnet werden");
+  }
+  // Betroffene Rechnungen in fester Reihenfolge sperren (verhindert Überbuchung und Deadlocks)
+  for (const docId of [...new Set(allocations.map((a) => a.billingDocumentId))].sort()) {
+    await tx.execute(sql`SELECT id FROM billing_documents WHERE id = ${docId} FOR UPDATE`);
+  }
   const previous = await tx
     .select()
     .from(paymentAllocations)
@@ -197,7 +211,7 @@ export async function applyAllocations(
   const total = allocations.reduce((s, a) => s + a.amountCents, 0);
   if (allocations.some((a) => a.amountCents <= 0))
     throw new DomainError(422, "Beträge müssen positiv sein");
-  if (total > Math.abs(t.amountCents)) {
+  if (allocations.length > 0 && total > t.amountCents) {
     throw new DomainError(422, "Zugeordnete Summe übersteigt den Umsatz");
   }
   if (allocations.length > 0) {
@@ -231,8 +245,7 @@ export async function applyAllocations(
       })),
     );
   }
-  const status =
-    total === 0 ? "offen" : total === Math.abs(t.amountCents) ? "zugeordnet" : "teilweise";
+  const status = total === 0 ? "offen" : total === t.amountCents ? "zugeordnet" : "teilweise";
   await tx.update(bankTransactions).set({ status }).where(eq(bankTransactions.id, transactionId));
 
   const docIds = [
@@ -270,8 +283,24 @@ export async function recomputeCasesForDocuments(tx: DbOrTx, docIds: string[], a
 }
 
 export async function ignoreTransaction(tx: DbOrTx, id: string, actor: string) {
+  const removed = await tx
+    .select({
+      billingDocumentId: paymentAllocations.billingDocumentId,
+      amountCents: paymentAllocations.amountCents,
+    })
+    .from(paymentAllocations)
+    .where(eq(paymentAllocations.transactionId, id));
   await applyAllocations(tx, id, [], "manuell", actor);
   await tx.update(bankTransactions).set({ status: "ignoriert" }).where(eq(bankTransactions.id, id));
+  await recordEvents(tx, [
+    {
+      entityType: "bank_transaction",
+      entityId: id,
+      type: "bank_transaction.ignored",
+      actor,
+      payload: { removedAllocations: removed },
+    },
+  ]);
 }
 
 /** Offene Eingänge erneut abgleichen (z. B. nach neuen Rechnungen). */

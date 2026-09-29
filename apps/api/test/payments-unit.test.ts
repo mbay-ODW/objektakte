@@ -206,3 +206,27 @@ describe("DATEV", () => {
     expect(splitGross(50000, 100000, 119000)).toEqual({ net: 42017, tax: 7983 });
   });
 });
+
+describe("Belegnummern im Verwendungszweck (Review)", () => {
+  it("erkennt Nummern nur an Wortgrenzen", async () => {
+    const { mentionsNumber } = await import("../src/modules/payments/matcher.js");
+    expect(mentionsNumber("RE-2026-17", "RE-2026-1")).toBe(false);
+    expect(mentionsNumber("RE-2026-1, 23 Euro", "RE-2026-123")).toBe(false);
+    expect(mentionsNumber("RE-2026-1, 23 Euro", "RE-2026-1")).toBe(true);
+    expect(mentionsNumber("Zahlung re 2026 239 danke", "RE-2026-239")).toBe(true);
+    expect(mentionsNumber("RE2026/239", "RE-2026-239")).toBe(true);
+    expect(mentionsNumber("XRE-2026-239", "RE-2026-239")).toBe(false);
+  });
+
+  it("bucht keine Zahlung für eine fremde, ähnliche Nummer", () => {
+    const items = [
+      { billingDocumentId: "a", number: "RE-2026-1", openCents: 50000, contactName: "A" },
+    ];
+    expect(
+      suggestAllocations(
+        { amountCents: 30000, purpose: "RE-2026-17", counterpartyName: null },
+        items,
+      ),
+    ).toEqual([]);
+  });
+});

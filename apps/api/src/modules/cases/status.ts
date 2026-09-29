@@ -36,6 +36,7 @@ export async function loadCaseFacts(tx: DbOrTx, caseId: string): Promise<CaseFac
       type: billingDocuments.type,
       status: billingDocuments.status,
       grossCents: billingDocuments.grossCents,
+      prepaidCents: billingDocuments.prepaidCents,
       paid: sql<string>`coalesce((select sum(pa.amount_cents) from payment_allocations pa where pa.billing_document_id = "billing_documents"."id"), 0)`,
     })
     .from(billingDocuments)
@@ -46,7 +47,8 @@ export async function loadCaseFacts(tx: DbOrTx, caseId: string): Promise<CaseFac
     orderConfirmed: docs.some((d) => d.type === "auftragsbestaetigung"),
     partialInvoiced: docs.some((d) => d.type === "abschlagsrechnung"),
     finalInvoiced: finals.length > 0,
-    finalPaid: finals.length > 0 && finals.every((d) => Number(d.paid) >= d.grossCents),
+    finalPaid:
+      finals.length > 0 && finals.every((d) => Number(d.paid) >= d.grossCents - d.prepaidCents),
   };
 }
 

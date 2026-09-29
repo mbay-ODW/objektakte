@@ -384,6 +384,13 @@ export const billingDocuments = pgTable(
     /** Bezug: stornierte Rechnung, gemahnte Rechnung oder umgewandeltes Angebot */
     precedingDocumentId: uuid("preceding_document_id"),
     prepaidCents: bigint("prepaid_cents", { mode: "number" }).notNull().default(0),
+    /** Netto-/Steueranteil der abgezogenen Abschläge (für Umsatz und Buchhaltung) */
+    prepaidNetCents: bigint("prepaid_net_cents", { mode: "number" }).notNull().default(0),
+    prepaidTaxCents: bigint("prepaid_tax_cents", { mode: "number" }).notNull().default(0),
+    /** Abgezogene Abschlagsrechnungen: [{ id, number, issueDate, netCents, taxCents, grossCents }] */
+    deductions: jsonb("deductions").notNull().default([]),
+    /** Befreiungsgründe je Steuerkategorie (BT-120), z. B. { "E": "…", "O": "…" } */
+    exemptionReasons: jsonb("exemption_reasons").notNull().default({}),
     eInvoiceFormat: eInvoiceFormat("e_invoice_format").notNull().default("zugferd"),
     sellerSnapshot: jsonb("seller_snapshot"),
     buyerSnapshot: jsonb("buyer_snapshot"),
@@ -396,6 +403,10 @@ export const billingDocuments = pgTable(
   },
   (t) => [
     uniqueIndex("billing_documents_number_uq").on(t.number),
+    // Eine Rechnung kann nur einmal (festgeschrieben) storniert werden
+    uniqueIndex("billing_documents_one_storno_uq")
+      .on(t.precedingDocumentId)
+      .where(sql`${t.type} = 'stornorechnung' and ${t.status} <> 'entwurf'`),
     index("billing_documents_case_idx").on(t.caseId),
     index("billing_documents_contact_idx").on(t.contactId),
   ],

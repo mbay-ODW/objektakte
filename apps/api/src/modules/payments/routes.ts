@@ -7,7 +7,7 @@ import {
   paymentAllocations,
 } from "../../db/schema.js";
 import { ErrorResponse } from "../../lib/errors.js";
-import { createRouter, UuidParam, ValidationError } from "../../lib/http.js";
+import { createRouter, queryBool, UuidParam, ValidationError } from "../../lib/http.js";
 import { getSetting, putSetting, settingSchemas } from "../../lib/settings.js";
 import { parseBankCsv } from "./csv.js";
 import {
@@ -237,7 +237,7 @@ const receivables = createRoute({
   summary: "Offene Posten (Rechnungen abzüglich zugeordneter Zahlungen)",
   request: {
     query: z.object({
-      overdueOnly: z.coerce.boolean().default(false),
+      overdueOnly: queryBool(false),
       today: z.iso.date().optional(),
     }),
   },
@@ -361,11 +361,11 @@ export const paymentsRouter = createRouter()
     c.json(await getSetting(c.get("db"), "bank"), 200),
   )
   .openapi(settingsPut("bank", "putBankSettings"), async (c) =>
-    c.json(await putSetting(c.get("db"), "bank", c.req.valid("json")), 200),
+    c.json(await putSetting(c.get("db"), "bank", c.req.valid("json"), c.get("actor")), 200),
   )
   .openapi(settingsGet("datev", "getDatevSettings"), async (c) =>
     c.json(await getSetting(c.get("db"), "datev"), 200),
   )
   .openapi(settingsPut("datev", "putDatevSettings"), async (c) =>
-    c.json(await putSetting(c.get("db"), "datev", c.req.valid("json")), 200),
+    c.json(await putSetting(c.get("db"), "datev", c.req.valid("json"), c.get("actor")), 200),
   );

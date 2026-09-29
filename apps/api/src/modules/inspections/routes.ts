@@ -300,7 +300,7 @@ export const inspectionsRouter = createRouter()
     const db = c.get("db");
     const { id, itemId } = c.req.valid("param") as { id: string; itemId: string };
     const body = c.req.valid("json");
-    await db.transaction((tx) => putItem(tx, id, itemId, body));
+    await db.transaction((tx) => putItem(tx, id, itemId, body, c.get("actor")));
     const d = await detailJson(db, id);
     return c.json(
       must(
@@ -312,7 +312,7 @@ export const inspectionsRouter = createRouter()
   })
   .openapi(deleteItemRoute, async (c) => {
     const { id, itemId } = c.req.valid("param") as { id: string; itemId: string };
-    await c.get("db").transaction((tx) => deleteItem(tx, id, itemId));
+    await c.get("db").transaction((tx) => deleteItem(tx, id, itemId, c.get("actor")));
     return c.body(null, 204);
   })
   .openapi(putMediaRoute, async (c) => {

@@ -49,6 +49,14 @@ export function checkInvoice(inv: CanonicalInvoice, profile: CiiProfile): RuleVi
   }
   if (categories.has("E"))
     need(inv.exemptionReasons.E, "BR-E-10", "Grund der Steuerbefreiung fehlt");
+  if (categories.has("O")) {
+    need(
+      categories.size === 1,
+      "BR-O-11",
+      "Nicht steuerbare Positionen (O) dürfen nicht mit anderen Steuerkategorien gemischt werden",
+    );
+    need(inv.exemptionReasons.O, "BR-O-10", "Grund für die Nichtsteuerbarkeit fehlt");
+  }
   if (categories.has("AE")) {
     need(
       inv.exemptionReasons.AE,

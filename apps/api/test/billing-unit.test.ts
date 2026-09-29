@@ -203,3 +203,13 @@ describe("Validator-Bericht", () => {
     });
   });
 });
+
+describe("Vorprüfung Kategorie O (Review)", () => {
+  it("verbietet Mischung mit anderen Kategorien und verlangt einen Grund", () => {
+    const base = sampleInvoice();
+    const mixed = sampleInvoice({
+      lines: [base.lines[0]!, { ...base.lines[1]!, taxCategory: "O", taxRatePercent: 0 }],
+    });
+    expect(checkInvoice(mixed, "en16931").map((v) => v.rule)).toEqual(["BR-O-11", "BR-O-10"]);
+  });
+});

@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { asc, eq, sql } from "drizzle-orm";
 import { measureTypes, numberSequences } from "../../db/schema.js";
+import { recordEvents, settingEntityId } from "../../lib/events.js";
 import { createRouter, ValidationError } from "../../lib/http.js";
 
 const json = <T extends z.ZodType>(schema: T) => ({ "application/json": { schema } });
@@ -132,6 +133,16 @@ export const settingsRouter = createRouter()
         .set({ nextValue, padding })
         .where(eqKey(key))
         .returning();
+      // Sprünge im Nummernkreis müssen nachvollziehbar sein (GoBD)
+      await recordEvents(tx, [
+        {
+          entityType: "setting",
+          entityId: settingEntityId(`sequence:${key}`),
+          type: "number_sequence.changed",
+          actor: c.get("actor"),
+          payload: { key, from: current ? Number(current.next_value) : 1, to: nextValue, padding },
+        },
+      ]);
       return row;
     });
     if (result === "conflict" || !result) {

@@ -2,8 +2,14 @@
 
 export type IsoDate = string;
 
-export function todayIso(now = new Date()): IsoDate {
-  return toIso(new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())));
+/** Heutiges Datum in deutscher Zeit – unabhängig von der Zeitzone des Servers/Containers. */
+export function todayIso(now = new Date(), timeZone = "Europe/Berlin"): IsoDate {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }
 
 function parse(d: IsoDate): Date {

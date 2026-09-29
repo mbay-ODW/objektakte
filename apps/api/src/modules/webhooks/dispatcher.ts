@@ -1,7 +1,8 @@
 import { createHmac } from "node:crypto";
-import { and, asc, eq, gt, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import type { Database } from "../../db/client.js";
 import { events, webhookSubscriptions } from "../../db/schema.js";
+import { settledAfter } from "../../lib/events.js";
 
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -50,7 +51,7 @@ export async function dispatchWebhooks(db: Database, opts: DispatchOptions = {})
     const candidates = await db
       .select()
       .from(events)
-      .where(gt(events.id, sub.lastEventId))
+      .where(settledAfter(sub.lastEventId))
       .orderBy(asc(events.id))
       .limit(batchSize);
     if (candidates.length === 0) continue;

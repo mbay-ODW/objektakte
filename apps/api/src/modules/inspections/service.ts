@@ -55,6 +55,12 @@ export const ItemPut = z
 
 const MAX_BYTES = { foto: 20 * 1024 * 1024, audio: 60 * 1024 * 1024 };
 
+/** Zulässige Dateitypen (Whitelist; der Typ landet später u. a. in Data-URIs des Protokolls). */
+export const ALLOWED_MIME = {
+  foto: ["image/jpeg", "image/png", "image/webp", "image/heic"],
+  audio: ["audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav"],
+} as const;
+
 async function loadInspection(tx: DbOrTx, id: string) {
   const [row] = await tx.select().from(inspections).where(eq(inspections.id, id));
   return row;
@@ -116,6 +122,7 @@ export async function putItem(
   inspectionId: string,
   itemId: string,
   input: z.infer<typeof ItemPut>,
+  actor = "system",
 ) {
   await assertEditable(tx, inspectionId);
   const values = {
@@ -139,13 +146,39 @@ export async function putItem(
     .insert(inspectionItems)
     .values({ id: itemId, ...values })
     .onConflictDoUpdate({ target: inspectionItems.id, set: values });
+  await recordEvents(tx, [
+    {
+      entityType: "inspection",
+      entityId: inspectionId,
+      type: other ? "inspection.item_updated" : "inspection.item_added",
+      actor,
+      payload: { itemId, category: input.category, label: input.label },
+    },
+  ]);
 }
 
-export async function deleteItem(tx: DbOrTx, inspectionId: string, itemId: string) {
+export async function deleteItem(
+  tx: DbOrTx,
+  inspectionId: string,
+  itemId: string,
+  actor = "system",
+) {
   await assertEditable(tx, inspectionId);
-  await tx
+  const removed = await tx
     .delete(inspectionItems)
-    .where(and(eq(inspectionItems.id, itemId), eq(inspectionItems.inspectionId, inspectionId)));
+    .where(and(eq(inspectionItems.id, itemId), eq(inspectionItems.inspectionId, inspectionId)))
+    .returning({ id: inspectionItems.id, label: inspectionItems.label });
+  if (removed.length > 0) {
+    await recordEvents(tx, [
+      {
+        entityType: "inspection",
+        entityId: inspectionId,
+        type: "inspection.item_removed",
+        actor,
+        payload: { itemId, label: removed[0]?.label },
+      },
+    ]);
+  }
 }
 
 function slug(s: string) {
@@ -212,12 +245,15 @@ export async function putMedia(
     return { id: mediaId, duplicate: true };
   }
   const inspection = await assertEditable(db, inspectionId);
-  const mimeType = upload.file.type || "application/octet-stream";
-  if (upload.kind === "foto" && !mimeType.startsWith("image/")) {
-    throw new DomainError(422, "Foto muss ein Bild sein");
-  }
-  if (upload.kind === "audio" && !mimeType.startsWith("audio/")) {
-    throw new DomainError(422, "Sprachnotiz muss eine Audiodatei sein");
+  // Parameter wie "; codecs=opus" abtrennen, dann gegen die Whitelist prüfen
+  const mimeType = (upload.file.type || "").split(";")[0]?.trim().toLowerCase() ?? "";
+  if (!(ALLOWED_MIME[upload.kind] as readonly string[]).includes(mimeType)) {
+    throw new DomainError(
+      422,
+      upload.kind === "foto"
+        ? "Foto muss JPEG, PNG, WebP oder HEIC sein"
+        : "Nicht unterstütztes Audioformat",
+    );
   }
   if (upload.file.size > MAX_BYTES[upload.kind]) {
     throw new DomainError(422, `Datei zu groß (max. ${MAX_BYTES[upload.kind] / 1024 / 1024} MB)`);

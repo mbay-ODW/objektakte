@@ -39,6 +39,10 @@ export default defineConfig({
         STORAGE_DIR: E2E.storageDir,
         WEBHOOK_INTERVAL_MS: "60000",
         WORKER_INTERVAL_MS: "60000",
+        // Mit EINVOICE_VALIDATOR_URL (z. B. in CI) prüft der echte Validator, sonst nur intern.
+        ...(process.env.EINVOICE_VALIDATOR_URL
+          ? { EINVOICE_VALIDATOR_URL: process.env.EINVOICE_VALIDATOR_URL }
+          : { EINVOICE_VALIDATION: "internal" }),
       },
     },
     {

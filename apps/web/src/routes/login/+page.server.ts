@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { webEnv } from "$lib/server/env";
+import { loginLimiter, waitMessage } from "$lib/server/rate-limit";
 import {
   constantTimeEqual,
   createSessionToken,
@@ -22,15 +23,21 @@ export const load: PageServerLoad = ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-  default: async ({ request, cookies, url }) => {
+  default: async ({ request, cookies, url, getClientAddress }) => {
     const env = webEnv();
+    const client = getClientAddress();
+    const wait = loginLimiter.retryAfter(client);
+    if (wait > 0) return fail(429, { error: waitMessage(wait) });
+
     const fd = await request.formData();
     const password = fd.get("password");
     if (typeof password !== "string" || !constantTimeEqual(password, env.password)) {
-      // Kleine Verzögerung bremst das Durchprobieren von Passwörtern.
+      loginLimiter.fail(client);
+      // Kleine Verzögerung bremst das Durchprobieren von Passwörtern zusätzlich.
       await new Promise((r) => setTimeout(r, 400));
       return fail(401, { error: "Passwort ist falsch." });
     }
+    loginLimiter.reset(client);
     cookies.set(SESSION_COOKIE, createSessionToken(env.sessionSecret), {
       path: "/",
       httpOnly: true,

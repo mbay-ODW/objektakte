@@ -4,6 +4,10 @@
   let { children } = $props();
   const nav = [
     ["/einstellungen", "Kommunikation"],
+    ["/einstellungen/firma", "Firmendaten"],
+    ["/einstellungen/artikel", "Artikel"],
+    ["/einstellungen/bank", "Bank-CSV"],
+    ["/einstellungen/datev", "DATEV"],
     ["/einstellungen/leistungsarten", "Leistungsarten"],
     ["/einstellungen/nummernkreise", "Nummernkreise"],
     ["/einstellungen/foerderprogramme", "Förderprogramme"],

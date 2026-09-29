@@ -55,3 +55,28 @@ export function failed(result: { error?: unknown; response: Response }, values?:
     values,
   });
 }
+
+/** Roher API-Aufruf (für Uploads mit Nicht-JSON-Inhalt); `path` relativ zu /api/v1. */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const env = webEnv();
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${env.apiToken}`);
+  return fetch(`${env.apiUrl}/api/v1/${path}`, { ...init, headers });
+}
+
+/** JSON-Antwort eines rohen Aufrufs auswerten wie `failed()`. */
+export async function rawResult<T>(
+  res: Response,
+): Promise<{ data?: T; error?: unknown; response: Response }> {
+  const body = await res.json().catch(() => null);
+  return res.ok ? { data: body as T, response: res } : { error: body ?? {}, response: res };
+}
+
+/** Textdatei dekodieren: UTF-8, sonst Windows-1252 (übliche Kodierung von Bankexporten). */
+export function decodeText(bytes: ArrayBuffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/^﻿/, "");
+  } catch {
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+}

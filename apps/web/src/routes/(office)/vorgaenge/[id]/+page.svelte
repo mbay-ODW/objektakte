@@ -1,5 +1,6 @@
 <script lang="ts">
   import { enhance } from "$app/forms";
+  import BillingStatusBadge from "$lib/components/BillingStatusBadge.svelte";
   import CaseForm from "$lib/components/CaseForm.svelte";
   import DeadlineBadge from "$lib/components/DeadlineBadge.svelte";
   import FormError from "$lib/components/FormError.svelte";
@@ -8,7 +9,12 @@
   import Timeline from "$lib/components/Timeline.svelte";
   import { keepValues } from "$lib/enhance";
   import { formatCents, formatDate, formatDateTime } from "$lib/format";
-  import { COMM_CHANNEL_LABELS, DIRECTION_LABELS, FUNDING_DATE_FIELDS } from "$lib/labels";
+  import {
+    BILLING_TYPE_LABELS,
+    COMM_CHANNEL_LABELS,
+    DIRECTION_LABELS,
+    FUNDING_DATE_FIELDS,
+  } from "$lib/labels";
   import type { ActionData, PageData } from "./$types";
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -27,6 +33,7 @@
     ["fristen", "Fristen"],
     ["chronik", "Chronik"],
     ["nachrichten", "Nachrichten"],
+    ["belege", "Belege"],
     ["dokumente", "Dokumente"],
     ["begehungen", "Begehungen"],
   ];
@@ -37,12 +44,17 @@
 <div class="spread">
   <div>
     <h1>{k.number} · {k.title}</h1>
-    <p class="row">
+    <div class="row head-meta">
       <StatusBadge status={k.status} />
-      {#if k.statusOverridden}<span class="badge" title="Status manuell gesetzt">manuell</span>{/if}
+      {#if k.statusOverridden}
+        <span class="badge" title="Status manuell gesetzt">manuell</span>
+        <form method="post" action="?/statusAuto" use:enhance class="inline-form">
+          <button type="submit" class="link small">Status wieder ableiten</button>
+        </form>
+      {/if}
       <a href="/kontakte/{k.customerId}">{k.customerName}</a>
       {#if k.objectId}· <a href="/objekte/{k.objectId}">{objectLabel ?? "Objekt"}</a>{/if}
-    </p>
+    </div>
   </div>
   {#if k.objectId}
     <a class="button primary" href="/vor-ort?objekt={k.objectId}&vorgang={k.id}">Begehung starten</a>
@@ -226,6 +238,32 @@
   {/if}
 </section>
 
+<section id="belege" class="card">
+  <div class="spread">
+    <h2>Belege</h2>
+    <div class="row">
+      <a class="button" href="/belege/neu?vorgang={k.id}&kontakt={k.customerId}&art=angebot">Angebot erstellen</a>
+      <a class="button primary" href="/belege/neu?vorgang={k.id}&kontakt={k.customerId}&art=rechnung">Rechnung erstellen</a>
+    </div>
+  </div>
+  {#if data.billing.length === 0}
+    <p class="muted">Noch keine Belege.</p>
+  {:else}
+    <ul class="plain">
+      {#each data.billing as b (b.id)}
+        <li class="spread">
+          <a href="/belege/{b.id}">{BILLING_TYPE_LABELS[b.type]} {b.number ?? "(Entwurf)"}</a>
+          <span class="row">
+            <span class="small muted">{formatDate(b.issueDate)}</span>
+            <span>{formatCents(b.grossCents)}</span>
+            <BillingStatusBadge status={b.status} />
+          </span>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+</section>
+
 <section id="dokumente" class="card">
   <h2>Dokumente</h2>
   {#if k.documents.length === 0}
@@ -239,17 +277,6 @@
             {#if doc.docClass}<span class="badge">{doc.docClass}</span>{/if}
             <a class="small" href="/dokumente/{doc.id}?download">Herunterladen</a>
           </span>
-        </li>
-      {/each}
-    </ul>
-  {/if}
-  {#if k.billingDocuments.length > 0}
-    <h3>Belege</h3>
-    <ul class="plain">
-      {#each k.billingDocuments as b (b.id)}
-        <li class="spread">
-          <span>{b.type} {b.number ?? "(Entwurf)"} · {formatDate(b.issueDate)}</span>
-          <span class="row"><span>{formatCents(b.grossCents)}</span><span class="badge">{b.status}</span></span>
         </li>
       {/each}
     </ul>
@@ -307,7 +334,10 @@
   details {
     margin-top: 0.75rem;
   }
-  p.row {
-    margin: 0;
+  .head-meta {
+    margin: 0 0 0.5rem;
+  }
+  .inline-form {
+    display: inline;
   }
 </style>

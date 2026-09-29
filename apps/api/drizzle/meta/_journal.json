@@ -64,6 +64,20 @@
       "when": 1790711594287,
       "tag": "0008_bank_zahlungen",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790712591484,
+      "tag": "0009_belege_positionen",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790712608466,
+      "tag": "0010_gobd_festschreibung",
+      "breakpoints": true
     }
   ]
 }

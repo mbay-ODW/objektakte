@@ -66,6 +66,69 @@ export const settingSchemas = {
         }),
     })
     .openapi("BankSettings"),
+  company: z
+    .object({
+      name: z.string().default(""),
+      street: z.string().default(""),
+      postalCode: z.string().default(""),
+      city: z.string().default(""),
+      country: z.string().length(2).default("DE"),
+      vatId: z.string().nullish(),
+      taxNumber: z.string().nullish(),
+      /** BT-29 Verkäuferkennung – nötig, wenn keine USt-IdNr. vorliegt (z. B. Kleinunternehmer) */
+      sellerId: z.string().nullish(),
+      email: z.string().default(""),
+      phone: z.string().default(""),
+      contactName: z.string().default(""),
+      website: z.string().nullish(),
+      bankName: z.string().nullish(),
+      iban: z.string().nullish(),
+      bic: z.string().nullish(),
+      /** Kleinunternehmer nach § 19 UStG: keine Umsatzsteuer */
+      smallBusiness: z.boolean().default(false),
+      paymentDays: z.number().int().min(0).max(120).default(14),
+      numberPatterns: z
+        .object({
+          angebot: z.string().default("ANG-{YYYY}-{N}"),
+          auftragsbestaetigung: z.string().default("AB-{YYYY}-{N}"),
+          rechnung: z.string().default("RE-{YYYY}-{N}"),
+          zahlungserinnerung: z.string().default("ZE-{YYYY}-{N}"),
+        })
+        .default({
+          angebot: "ANG-{YYYY}-{N}",
+          auftragsbestaetigung: "AB-{YYYY}-{N}",
+          rechnung: "RE-{YYYY}-{N}",
+          zahlungserinnerung: "ZE-{YYYY}-{N}",
+        }),
+      texts: z
+        .object({
+          invoiceIntro: z.string().default("für die erbrachten Leistungen berechnen wir Ihnen:"),
+          invoiceClosing: z.string().default("Vielen Dank für Ihren Auftrag."),
+          offerIntro: z.string().default("gerne bieten wir Ihnen folgende Leistungen an:"),
+          offerClosing: z
+            .string()
+            .default("Wir freuen uns auf Ihren Auftrag. Dieses Angebot ist 30 Tage gültig."),
+          reminder: z
+            .array(z.string())
+            .default([
+              "sicher haben Sie übersehen, die folgende Rechnung zu begleichen. Wir bitten um Ausgleich bis zum genannten Datum.",
+              "leider konnten wir bis heute keinen Zahlungseingang feststellen. Bitte überweisen Sie den offenen Betrag umgehend.",
+              "trotz unserer Erinnerungen ist die Rechnung weiterhin offen. Bitte begleichen Sie den Betrag bis zum genannten Datum, andernfalls sehen wir uns zu weiteren Schritten gezwungen.",
+            ]),
+        })
+        .default({
+          invoiceIntro: "für die erbrachten Leistungen berechnen wir Ihnen:",
+          invoiceClosing: "Vielen Dank für Ihren Auftrag.",
+          offerIntro: "gerne bieten wir Ihnen folgende Leistungen an:",
+          offerClosing: "Wir freuen uns auf Ihren Auftrag. Dieses Angebot ist 30 Tage gültig.",
+          reminder: [
+            "sicher haben Sie übersehen, die folgende Rechnung zu begleichen. Wir bitten um Ausgleich bis zum genannten Datum.",
+            "leider konnten wir bis heute keinen Zahlungseingang feststellen. Bitte überweisen Sie den offenen Betrag umgehend.",
+            "trotz unserer Erinnerungen ist die Rechnung weiterhin offen. Bitte begleichen Sie den Betrag bis zum genannten Datum, andernfalls sehen wir uns zu weiteren Schritten gezwungen.",
+          ],
+        }),
+    })
+    .openapi("CompanySettings"),
   datev: z
     .object({
       consultantNumber: z.number().int().min(1000).max(9999999).optional(),

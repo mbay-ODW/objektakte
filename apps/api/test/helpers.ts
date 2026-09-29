@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { sql } from "drizzle-orm";
 import type { Services } from "../src/adapters/index.js";
 import { LocalStorage } from "../src/adapters/storage.js";
+import { HttpEInvoiceValidator } from "../src/adapters/validator.js";
 import { createApp } from "../src/app.js";
 import { createDb, type Database } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
@@ -35,6 +36,11 @@ export function testServices(overrides: Partial<Services> = {}): Services {
     transcriber: {
       transcribe: async (audio) => `Transkript (${audio.length} Bytes)`,
     },
+    // Echter Validator, wenn verfügbar (lokal/CI: Mustang-Sidecar), sonst nur interne Prüfung
+    validator: process.env.EINVOICE_VALIDATOR_URL
+      ? new HttpEInvoiceValidator(process.env.EINVOICE_VALIDATOR_URL)
+      : undefined,
+    eInvoiceValidation: process.env.EINVOICE_VALIDATOR_URL ? "required" : "internal",
     ...overrides,
   };
 }

@@ -16,6 +16,10 @@ const EnvSchema = z.object({
   WHISPER_MODEL: z.string().default("Systran/faster-whisper-large-v3"),
   WHISPER_API_KEY: z.string().optional(),
   WORKER_INTERVAL_MS: z.coerce.number().int().min(500).default(10000),
+  /** URL des E-Rechnungs-Validators (Sidecar aus /validator) */
+  EINVOICE_VALIDATOR_URL: z.string().url().optional(),
+  /** required = ohne erfolgreiche externe Prüfung kein Festschreiben; internal = nur Vorprüfung */
+  EINVOICE_VALIDATION: z.enum(["required", "internal"]).default("required"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

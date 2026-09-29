@@ -6,6 +6,7 @@ import type { Services } from "./adapters/index.js";
 import type { Database } from "./db/client.js";
 import { DomainError, errorCode } from "./lib/errors.js";
 import type { AppEnv } from "./lib/http.js";
+import { billingRouter } from "./modules/billing/routes.js";
 import { casesRouter } from "./modules/cases/routes.js";
 import { communicationsRouter } from "./modules/communications/routes.js";
 import { contactsRouter } from "./modules/contacts/routes.js";
@@ -73,6 +74,7 @@ export function createApp({ db, apiToken, services }: AppOptions) {
   api.route("/", communicationsRouter);
   api.route("/", inspectionsRouter);
   api.route("/", documentsRouter);
+  api.route("/", billingRouter);
   api.route("/", paymentsRouter);
   api.route("/", reportsRouter);
   api.route("/", settingsRouter);

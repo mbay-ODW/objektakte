@@ -12,7 +12,8 @@ export type EntityType =
   | "deadline"
   | "deadline_rule"
   | "inspection"
-  | "bank_transaction";
+  | "bank_transaction"
+  | "incoming_invoice";
 
 export interface EventInput {
   entityType: EntityType;

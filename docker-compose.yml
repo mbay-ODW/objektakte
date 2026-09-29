@@ -31,6 +31,8 @@ services:
       NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD:-}
       GOTENBERG_URL: http://gotenberg:3000
       WHISPER_URL: ${WHISPER_URL:-}
+      EINVOICE_VALIDATOR_URL: http://validator:8080
+      EINVOICE_VALIDATION: required
     volumes:
       - files:/data/files
     ports:
@@ -38,6 +40,11 @@ services:
 
   gotenberg:
     image: gotenberg/gotenberg:8
+    restart: unless-stopped
+
+  # Prüft E-Rechnungen (EN 16931, XRechnung, ZUGFeRD inkl. PDF/A) vor dem Festschreiben
+  validator:
+    build: ./validator
     restart: unless-stopped
 
 volumes:

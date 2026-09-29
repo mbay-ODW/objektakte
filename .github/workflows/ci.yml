@@ -40,7 +40,19 @@ jobs:
           pnpm exec drizzle-kit generate --name ci-check
           git diff --exit-code -- drizzle || (echo "Schema und Migrationen weichen ab: pnpm db:generate ausführen" && exit 1)
           test -z "$(git status --porcelain -- drizzle)" || (git status --porcelain -- drizzle && echo "Nicht eingecheckte Migration erzeugt" && exit 1)
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: E-Rechnungs-Validator starten (Mustang)
+        run: |
+          curl -fsSL -o /tmp/mustang.jar https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
+          (PORT=8089 java -cp /tmp/mustang.jar validator/Server.java > /tmp/validator.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf http://localhost:8089/health && exit 0; sleep 2; done
+          cat /tmp/validator.log; exit 1
       - run: pnpm test
+        env:
+          EINVOICE_VALIDATOR_URL: http://localhost:8089
       - run: pnpm build
 
   docker:
@@ -48,3 +60,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t objektakte-api .
+      - run: docker build -t objektakte-validator validator

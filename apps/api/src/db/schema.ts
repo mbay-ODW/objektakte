@@ -344,6 +344,9 @@ export const billingDocStatus = pgEnum("billing_doc_status", [
 
 export const billingDocSource = pgEnum("billing_doc_source", ["nativ", "import"]);
 
+/** zugferd = PDF/A-3 mit eingebetteter XML (EN 16931), xrechnung = reine XML für öffentliche Auftraggeber */
+export const eInvoiceFormat = pgEnum("e_invoice_format", ["zugferd", "xrechnung", "keine"]);
+
 export const billingDocuments = pgTable(
   "billing_documents",
   {
@@ -369,6 +372,26 @@ export const billingDocuments = pgTable(
     finalizedAt: timestamp("finalized_at", { withTimezone: true }),
     /** SHA-256 über den festgeschriebenen Inhalt (GoBD-Nachweis). */
     contentHash: text("content_hash"),
+    intro: text("intro"),
+    closing: text("closing"),
+    /** BT-10: Leitweg-ID oder sonstige Käuferreferenz */
+    buyerReference: text("buyer_reference"),
+    orderReference: text("order_reference"),
+    serviceDate: date("service_date"),
+    servicePeriodStart: date("service_period_start"),
+    servicePeriodEnd: date("service_period_end"),
+    paymentTermsText: text("payment_terms_text"),
+    /** Bezug: stornierte Rechnung, gemahnte Rechnung oder umgewandeltes Angebot */
+    precedingDocumentId: uuid("preceding_document_id"),
+    prepaidCents: bigint("prepaid_cents", { mode: "number" }).notNull().default(0),
+    eInvoiceFormat: eInvoiceFormat("e_invoice_format").notNull().default("zugferd"),
+    sellerSnapshot: jsonb("seller_snapshot"),
+    buyerSnapshot: jsonb("buyer_snapshot"),
+    xmlDocumentId: uuid("xml_document_id").references(() => documents.id, { onDelete: "set null" }),
+    validation: jsonb("validation"),
+    reminderLevel: integer("reminder_level"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    sentVia: text("sent_via"),
     ...timestamps,
   },
   (t) => [
@@ -757,4 +780,77 @@ export const paymentAllocations = pgTable(
     uniqueIndex("payment_allocations_uq").on(t.transactionId, t.billingDocumentId),
     index("payment_allocations_doc_idx").on(t.billingDocumentId),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// Belegpositionen, Artikel, Eingangsrechnungen
+// ---------------------------------------------------------------------------
+
+export const taxCategory = pgEnum("tax_category", ["S", "Z", "E", "AE", "O"]);
+
+export const billingLines = pgTable(
+  "billing_lines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    billingDocumentId: uuid("billing_document_id")
+      .notNull()
+      .references(() => billingDocuments.id, { onDelete: "cascade" }),
+    position: integer("position").notNull(),
+    articleCode: text("article_code"),
+    name: text("name").notNull(),
+    description: text("description"),
+    quantity: numeric("quantity", { precision: 14, scale: 4 }).notNull(),
+    unitCode: text("unit_code").notNull(),
+    unitPriceCents: bigint("unit_price_cents", { mode: "number" }).notNull(),
+    taxCategory: taxCategory("tax_category").notNull(),
+    taxRatePercent: numeric("tax_rate_percent", { precision: 5, scale: 2 }).notNull(),
+    lineNetCents: bigint("line_net_cents", { mode: "number" }).notNull(),
+  },
+  (t) => [uniqueIndex("billing_lines_position_uq").on(t.billingDocumentId, t.position)],
+);
+
+export const articles = pgTable("articles", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  unitCode: text("unit_code").notNull().default("C62"),
+  unitPriceCents: bigint("unit_price_cents", { mode: "number" }).notNull(),
+  taxCategory: taxCategory("tax_category").notNull().default("S"),
+  taxRatePercent: numeric("tax_rate_percent", { precision: 5, scale: 2 }).notNull().default("19"),
+  active: boolean("active").notNull().default(true),
+  ...timestamps,
+});
+
+export const incomingInvoiceStatus = pgEnum("incoming_invoice_status", [
+  "offen",
+  "geprueft",
+  "bezahlt",
+  "abgelehnt",
+]);
+
+export const incomingInvoices = pgTable(
+  "incoming_invoices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id").references(() => documents.id, { onDelete: "set null" }),
+    /** "cii" oder "ubl" */
+    syntax: text("syntax").notNull(),
+    typeCode: text("type_code"),
+    number: text("number").notNull(),
+    issueDate: date("issue_date"),
+    dueDate: date("due_date"),
+    sellerName: text("seller_name"),
+    sellerVatId: text("seller_vat_id"),
+    buyerReference: text("buyer_reference"),
+    currency: text("currency").notNull().default("EUR"),
+    netCents: bigint("net_cents", { mode: "number" }),
+    taxCents: bigint("tax_cents", { mode: "number" }),
+    grossCents: bigint("gross_cents", { mode: "number" }),
+    payableCents: bigint("payable_cents", { mode: "number" }),
+    iban: text("iban"),
+    status: incomingInvoiceStatus("status").notNull().default("offen"),
+    sha256: text("sha256").notNull(),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex("incoming_invoices_sha_uq").on(t.sha256)],
 );

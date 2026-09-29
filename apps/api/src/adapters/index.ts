@@ -2,6 +2,7 @@ import type { Env } from "../env.js";
 import { GotenbergRenderer, type PdfRenderer } from "./pdf.js";
 import { type FileStorage, LocalStorage, WebDavStorage } from "./storage.js";
 import { OpenAiCompatibleTranscriber, type Transcriber } from "./transcriber.js";
+import { type EInvoiceValidator, HttpEInvoiceValidator } from "./validator.js";
 
 /** Externe Dienste; in Tests durch Fakes ersetzbar. */
 export interface Services {
@@ -10,6 +11,9 @@ export interface Services {
   storageBasePath: string;
   pdf?: PdfRenderer;
   transcriber?: Transcriber;
+  validator?: EInvoiceValidator;
+  /** required = Festschreiben nur nach bestandener externer Prüfung */
+  eInvoiceValidation: "required" | "internal";
 }
 
 export function servicesFromEnv(env: Env): Services {
@@ -28,6 +32,10 @@ export function servicesFromEnv(env: Env): Services {
     transcriber: env.WHISPER_URL
       ? new OpenAiCompatibleTranscriber(env.WHISPER_URL, env.WHISPER_MODEL, env.WHISPER_API_KEY)
       : undefined,
+    validator: env.EINVOICE_VALIDATOR_URL
+      ? new HttpEInvoiceValidator(env.EINVOICE_VALIDATOR_URL)
+      : undefined,
+    eInvoiceValidation: env.EINVOICE_VALIDATION,
   };
 }
 

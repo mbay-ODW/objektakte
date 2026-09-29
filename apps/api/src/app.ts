@@ -6,6 +6,7 @@ import type { Database } from "./db/client.js";
 import { DomainError, errorCode } from "./lib/errors.js";
 import type { AppEnv } from "./lib/http.js";
 import { casesRouter } from "./modules/cases/routes.js";
+import { communicationsRouter } from "./modules/communications/routes.js";
 import { contactsRouter } from "./modules/contacts/routes.js";
 import { fundingRouter } from "./modules/funding/routes.js";
 import { importRouter } from "./modules/import/routes.js";
@@ -62,6 +63,7 @@ export function createApp({ db, apiToken }: AppOptions) {
   api.route("/", objectsRouter);
   api.route("/", casesRouter);
   api.route("/", fundingRouter);
+  api.route("/", communicationsRouter);
   api.route("/", settingsRouter);
   api.route("/", webhooksRouter);
   api.route("/", importRouter);

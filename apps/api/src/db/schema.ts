@@ -235,6 +235,17 @@ export const commChannel = pgEnum("comm_channel", [
 
 export const commDirection = pgEnum("comm_direction", ["eingehend", "ausgehend", "intern"]);
 
+export const assignmentStatus = pgEnum("assignment_status", [
+  /** noch nicht zugeordnet oder mehrdeutig → Zuordnungs-Inbox */
+  "offen",
+  /** automatisch zugeordnet, noch nicht bestätigt */
+  "automatisch",
+  /** manuell zugeordnet oder bestätigt */
+  "bestaetigt",
+  /** bewusst ignoriert (z. B. Newsletter) */
+  "ignoriert",
+]);
+
 export const communications = pgTable(
   "communications",
   {
@@ -250,9 +261,22 @@ export const communications = pgTable(
     author: text("author"),
     /** Konfidenz der automatischen Zuordnung (0–1); null = manuell zugeordnet. */
     matchConfidence: numeric("match_confidence", { precision: 4, scale: 3 }),
+    assignmentStatus: assignmentStatus("assignment_status").notNull().default("offen"),
+    matchReason: text("match_reason"),
+    /** Vorschläge der Zuordnung: [{ caseId, number, score }] */
+    matchCandidates: jsonb("match_candidates").notNull().default([]),
+    /** Absender/Empfänger: [{ role: "from"|"to"|"cc", address, name }] */
+    participants: jsonb("participants").notNull().default([]),
+    /** Herkunft (z. B. Postfach) und dortige ID (z. B. Message-ID) zur Deduplizierung. */
+    source: text("source"),
+    sourceRef: text("source_ref"),
     createdAt: timestamps.createdAt,
   },
   (t) => [
+    uniqueIndex("communications_source_ref_uq")
+      .on(t.source, t.sourceRef)
+      .where(sql`${t.sourceRef} is not null`),
+    index("communications_inbox_idx").on(t.assignmentStatus, t.occurredAt),
     index("communications_case_idx").on(t.caseId, t.occurredAt),
     index("communications_contact_idx").on(t.contactId, t.occurredAt),
     index("communications_unassigned_idx").on(t.occurredAt).where(sql`${t.caseId} is null`),
@@ -272,6 +296,9 @@ export const documents = pgTable(
     caseId: uuid("case_id").references(() => cases.id, { onDelete: "set null" }),
     objectId: uuid("object_id").references(() => objects.id, { onDelete: "set null" }),
     contactId: uuid("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    communicationId: uuid("communication_id").references(() => communications.id, {
+      onDelete: "set null",
+    }),
     title: text("title").notNull(),
     /** Dokumentklasse, z. B. antrag, bescheid, bericht, foto, rechnung. */
     docClass: text("doc_class"),
@@ -529,5 +556,15 @@ export const numberSequences = pgTable("number_sequences", {
   key: text("key").primaryKey(),
   nextValue: bigint("next_value", { mode: "number" }).notNull().default(1),
   padding: integer("padding").notNull().default(0),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// Einstellungen (Schlüssel/Wert)
+// ---------------------------------------------------------------------------
+
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").notNull(),
   ...timestamps,
 });

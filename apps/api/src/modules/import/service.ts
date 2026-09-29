@@ -431,6 +431,7 @@ class ImportRun {
         body: m.body ?? null,
         author: m.author ?? null,
         matchConfidence: null,
+        assignmentStatus: m.caseExternalId ? "bestaetigt" : "offen",
       });
       counts[action]++;
     }

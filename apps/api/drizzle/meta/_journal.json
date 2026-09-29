@@ -43,6 +43,13 @@
       "when": 1790710510103,
       "tag": "0005_fristen_regel_erledigt",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790710693409,
+      "tag": "0006_kommunikation_zuordnung",
+      "breakpoints": true
     }
   ]
 }

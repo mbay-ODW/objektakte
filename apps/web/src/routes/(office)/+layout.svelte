@@ -3,14 +3,35 @@
 
   let { children } = $props();
 
-  const nav = [
-    { href: "/", label: "Übersicht" },
-    { href: "/vorgaenge", label: "Vorgänge" },
-    { href: "/kontakte", label: "Kontakte" },
-    { href: "/objekte", label: "Objekte" },
-    { href: "/fristen", label: "Fristen" },
-    { href: "/inbox", label: "Inbox" },
-    { href: "/einstellungen", label: "Einstellungen" },
+  const groups = [
+    {
+      label: "Arbeit",
+      items: [
+        { href: "/", label: "Übersicht" },
+        { href: "/vorgaenge", label: "Vorgänge" },
+        { href: "/inbox", label: "Inbox" },
+        { href: "/fristen", label: "Fristen" },
+        { href: "/vor-ort", label: "Vor Ort" },
+      ],
+    },
+    {
+      label: "Stammdaten",
+      items: [
+        { href: "/kontakte", label: "Kontakte" },
+        { href: "/objekte", label: "Objekte" },
+      ],
+    },
+    {
+      label: "Finanzen",
+      items: [
+        { href: "/belege", label: "Belege" },
+        { href: "/zahlungen", label: "Zahlungen" },
+        { href: "/offene-posten", label: "Offene Posten" },
+        { href: "/eingang", label: "Eingang" },
+        { href: "/auswertungen", label: "Auswertungen" },
+      ],
+    },
+    { label: "System", items: [{ href: "/einstellungen", label: "Einstellungen" }] },
   ];
 
   const isActive = (href: string) =>
@@ -21,14 +42,20 @@
 <header class="topbar">
   <a class="brand" href="/">objektakte</a>
   <nav aria-label="Hauptnavigation">
-    <ul>
-      {#each nav as item (item.href)}
-        <li>
-          <a href={item.href} aria-current={isActive(item.href) ? "page" : undefined}>{item.label}</a>
-        </li>
-      {/each}
-      <li><a href="/vor-ort" class="vor-ort">Vor Ort</a></li>
-    </ul>
+    {#each groups as group (group.label)}
+      <div class="group" role="group" aria-labelledby="nav-{group.label}">
+        <span class="group-label" id="nav-{group.label}">{group.label}</span>
+        <ul>
+          {#each group.items as item (item.href)}
+            <li>
+              <a href={item.href} aria-current={isActive(item.href) ? "page" : undefined}
+                >{item.label}</a
+              >
+            </li>
+          {/each}
+        </ul>
+      </div>
+    {/each}
   </nav>
   <form method="post" action="/logout">
     <button type="submit" class="small">Abmelden</button>
@@ -71,7 +98,20 @@
   }
   nav {
     flex: 1;
-    overflow-x: auto;
+    display: flex;
+    gap: 0.25rem 1rem;
+    flex-wrap: wrap;
+  }
+  .group {
+    display: flex;
+    flex-direction: column;
+  }
+  .group-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    padding-left: 0.65rem;
   }
   nav ul {
     display: flex;
@@ -93,14 +133,12 @@
     color: var(--primary);
     font-weight: 600;
   }
-  nav a.vor-ort {
-    border: 1px solid var(--primary);
-    color: var(--primary);
-  }
-  @media (max-width: 52rem) {
+  @media (max-width: 72rem) {
     nav {
       order: 3;
       flex-basis: 100%;
+      flex-wrap: nowrap;
+      overflow-x: auto;
     }
     form {
       margin-left: auto;

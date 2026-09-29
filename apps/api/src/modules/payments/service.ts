@@ -141,7 +141,7 @@ export async function importTransactions(
 /** Ermittelt Vorschläge für einen offenen Umsatz und ordnet eindeutige Treffer automatisch zu. */
 export async function matchTransaction(tx: DbOrTx, id: string, actor: string): Promise<boolean> {
   const [t] = await tx.select().from(bankTransactions).where(eq(bankTransactions.id, id));
-  if (!t || t.status !== "offen") return false;
+  if (t?.status !== "offen") return false;
   const settings = await getSetting(tx, "bank");
   const items: OpenItem[] = (await loadReceivables(tx)).map((r) => ({
     billingDocumentId: r.billingDocumentId,

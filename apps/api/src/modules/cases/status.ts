@@ -1,6 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DbOrTx } from "../../db/client.js";
-import { billingDocuments, cases, paymentAllocations } from "../../db/schema.js";
+import { billingDocuments, cases } from "../../db/schema.js";
 import { recordEvents } from "../../lib/events.js";
 
 type Status = (typeof cases.$inferSelect)["status"];

@@ -119,5 +119,5 @@ export function buildDatevCsv(h: DatevHeader, bookings: DatevBooking[]): string 
       ),
     ].join(";");
   });
-  return [header, COLUMNS.map(q).join(";"), ...lines].join("\r\n") + "\r\n";
+  return `${[header, COLUMNS.map(q).join(";"), ...lines].join("\r\n")}\r\n`;
 }

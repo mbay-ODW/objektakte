@@ -128,3 +128,94 @@ export const DIRECTION_LABELS: Record<string, string> = {
   ausgehend: "ausgehend",
   intern: "intern",
 };
+
+// ---------------------------------------------------------------------------
+// Belege und Zahlungen
+// ---------------------------------------------------------------------------
+
+export type BillingType = Schemas["BillingDocument"]["type"];
+export type BillingStatus = Schemas["BillingDocument"]["status"];
+export type TaxCategory = Schemas["BillingDocument"]["lines"][number]["taxCategory"];
+
+export const BILLING_TYPE_LABELS: Record<BillingType, string> = {
+  angebot: "Angebot",
+  auftragsbestaetigung: "Auftragsbestätigung",
+  rechnung: "Rechnung",
+  abschlagsrechnung: "Abschlagsrechnung",
+  schlussrechnung: "Schlussrechnung",
+  stornorechnung: "Stornorechnung",
+  gutschrift: "Gutschrift",
+  zahlungserinnerung: "Zahlungserinnerung",
+  zahlungsbestaetigung: "Zahlungsbestätigung",
+};
+export const BILLING_TYPES = Object.keys(BILLING_TYPE_LABELS) as BillingType[];
+
+/** Belegarten, die als Entwurf angelegt werden können. */
+export const DRAFT_TYPES = [
+  "rechnung",
+  "angebot",
+  "auftragsbestaetigung",
+  "abschlagsrechnung",
+  "schlussrechnung",
+  "gutschrift",
+] as const satisfies readonly BillingType[];
+export type DraftType = (typeof DRAFT_TYPES)[number];
+
+/** Rechnungsarten (können storniert werden und haben offene Posten). */
+export const INVOICE_TYPES: readonly BillingType[] = [
+  "rechnung",
+  "abschlagsrechnung",
+  "schlussrechnung",
+];
+
+export const BILLING_STATUS_LABELS: Record<BillingStatus, string> = {
+  entwurf: "Entwurf",
+  festgeschrieben: "festgeschrieben",
+  versendet: "versendet",
+  storniert: "storniert",
+};
+export const BILLING_STATUSES = Object.keys(BILLING_STATUS_LABELS) as BillingStatus[];
+
+/** Einheiten nach UN/ECE Rec. 20 (wie UNIT_CODES der API). */
+export const UNIT_LABELS: Record<string, string> = {
+  C62: "Stück",
+  H87: "Stück (H87)",
+  HUR: "Stunde",
+  MIN: "Minute",
+  DAY: "Tag",
+  LS: "pauschal",
+  KMT: "km",
+  MTK: "m²",
+  MTR: "m",
+  E48: "Leistung",
+};
+export const UNIT_CODES = Object.keys(UNIT_LABELS);
+
+export const TAX_CATEGORY_LABELS: Record<TaxCategory, string> = {
+  S: "Normalsatz / ermäßigt (S)",
+  Z: "Nullsatz (Z)",
+  E: "steuerbefreit (E)",
+  AE: "Reverse Charge § 13b (AE)",
+  O: "nicht steuerbar (O)",
+};
+export const TAX_CATEGORIES = Object.keys(TAX_CATEGORY_LABELS) as TaxCategory[];
+
+export const EINVOICE_FORMAT_LABELS: Record<string, string> = {
+  zugferd: "ZUGFeRD (PDF mit XML)",
+  xrechnung: "XRechnung (XML)",
+  keine: "keine E-Rechnung",
+};
+
+export const BANK_STATUS_LABELS: Record<string, string> = {
+  offen: "offen",
+  zugeordnet: "zugeordnet",
+  teilweise: "teilweise zugeordnet",
+  ignoriert: "ignoriert",
+};
+
+export const INCOMING_STATUS_LABELS: Record<string, string> = {
+  offen: "offen",
+  geprueft: "geprüft",
+  bezahlt: "bezahlt",
+  abgelehnt: "abgelehnt",
+};

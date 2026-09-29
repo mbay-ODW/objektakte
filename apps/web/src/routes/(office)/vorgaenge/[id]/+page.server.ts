@@ -18,6 +18,9 @@ export const load: PageServerLoad = async ({ params }) => {
       client.GET("/api/v1/inspections", { params: { query: { caseId: id } } }),
       client.GET("/api/v1/objects", { params: { query: { limit: 500, offset: 0 } } }),
     ]);
+  const billing = await client.GET("/api/v1/billing-documents", {
+    params: { query: { caseId: id, limit: 200 } },
+  });
   return {
     kase: must(kase),
     measureTypes: must(measures).items,
@@ -27,10 +30,17 @@ export const load: PageServerLoad = async ({ params }) => {
     timeline: must(timeline).items,
     inspections: must(inspections).items,
     objects: must(objects).items,
+    billing: must(billing).items,
   };
 };
 
 export const actions: Actions = {
+  statusAuto: async ({ params }) => {
+    const res = await api().POST("/api/v1/cases/{id}/status/auto", {
+      params: { path: { id: params.id } },
+    });
+    return failed(res) ?? { saved: "case" };
+  },
   update: async ({ request, params }) => {
     const fd = await request.formData();
     const { customerId: _customerId, ...patch } = parseCase(fd);

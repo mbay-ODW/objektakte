@@ -1,6 +1,6 @@
 <script lang="ts">
   import DeadlineBadge from "$lib/components/DeadlineBadge.svelte";
-  import { formatDate } from "$lib/format";
+  import { formatCents, formatDate } from "$lib/format";
   import { CASE_STATUS_LABELS, CASE_STATUSES } from "$lib/labels";
   import type { PageData } from "./$types";
 
@@ -72,6 +72,23 @@
     </dl>
   </section>
 
+  <section class="card" aria-labelledby="op-h">
+    <div class="spread">
+      <h2 id="op-h">Offene Posten</h2>
+      <a href="/offene-posten">Alle offenen Posten</a>
+    </div>
+    <dl class="facts">
+      <dt>Offen gesamt</dt>
+      <dd><strong data-testid="dashboard-open-total">{formatCents(data.receivables.totalOpenCents)}</strong> ({data.receivables.count})</dd>
+      <dt>Überfällig</dt>
+      <dd>
+        <strong class:overdue={data.receivables.overdueCount > 0}>{data.receivables.overdueCount}</strong>
+        ({formatCents(data.receivables.overdueCents)})
+        {#if data.receivables.overdueCount > 0}<a href="/offene-posten?ueberfaellig=1">anzeigen</a>{/if}
+      </dd>
+    </dl>
+  </section>
+
   <section class="card" aria-labelledby="cases-h">
     <div class="spread">
       <h2 id="cases-h">Vorgänge nach Status</h2>
@@ -87,3 +104,9 @@
     </ul>
   </section>
 </div>
+
+<style>
+  .overdue {
+    color: var(--danger);
+  }
+</style>

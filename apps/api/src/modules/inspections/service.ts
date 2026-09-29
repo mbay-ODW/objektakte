@@ -546,7 +546,7 @@ export async function processTranscriptions(db: Database, services: Services, li
 export async function retryTranscription(db: Database, services: Services, mediaId: string) {
   if (!services.transcriber) throw new DomainError(422, "Keine Transkription konfiguriert");
   const [m] = await db.select().from(inspectionMedia).where(eq(inspectionMedia.id, mediaId));
-  if (!m || m.kind !== "audio") throw new DomainError(404, "Sprachnotiz nicht gefunden");
+  if (m?.kind !== "audio") throw new DomainError(404, "Sprachnotiz nicht gefunden");
   await db
     .update(inspectionMedia)
     .set({ transcriptStatus: "ausstehend", transcriptAttempts: 0, transcriptError: null })

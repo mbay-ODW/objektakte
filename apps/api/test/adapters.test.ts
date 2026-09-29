@@ -75,7 +75,7 @@ describe("GotenbergRenderer", () => {
     expect(new TextDecoder().decode(pdf)).toBe("%PDF-1.7");
     expect(calls[0]?.url).toBe("http://gotenberg:3000/forms/chromium/convert/html");
     expect(form?.get("pdfa")).toBe("PDF/A-3b");
-    expect((form?.get("files") as File).name).toBe("index.html");
+    expect((form?.get("files") as File | undefined)?.name).toBe("index.html");
   });
 });
 

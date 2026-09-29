@@ -3,3 +3,7 @@
 .git
 .env
 import-data
+**/.svelte-kit
+**/build
+**/test-results
+**/playwright-report

@@ -86,9 +86,22 @@ jobs:
       - name: Playwright-Browser installieren
         working-directory: apps/web
         run: npx playwright install --with-deps chromium
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: E-Rechnungs-Validator starten (Mustang)
+        run: |
+          curl -fsSL -o /tmp/mustang.jar https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/2.26.0/Mustang-CLI-2.26.0.jar
+          (PORT=8089 java -cp /tmp/mustang.jar validator/Server.java > /tmp/validator.log 2>&1 &)
+          for i in $(seq 1 60); do curl -sf http://localhost:8089/health && exit 0; sleep 2; done
+          cat /tmp/validator.log; exit 1
       - name: E2E-Tests
         working-directory: apps/web
         run: pnpm test:e2e
+        env:
+          # Festgeschriebene Rechnungen werden in den E2E-Tests echt validiert.
+          EINVOICE_VALIDATOR_URL: http://localhost:8089
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

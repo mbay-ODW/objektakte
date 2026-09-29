@@ -20,13 +20,16 @@ WEB_SESSION_SECRET=$(openssl rand -hex 32) pnpm dev
 | `WEB_SESSION_SECRET` | Schlüssel für die Signatur des Sitzungscookies, mindestens 32 Zeichen |
 | `ORIGIN` | Öffentliche Adresse, z. B. `https://akte.example.org` (nötig für die CSRF-Prüfung hinter einem Reverse Proxy) |
 | `WEB_COOKIE_SECURE` | optional; `false` erlaubt das Cookie ohne HTTPS (Standard: nur in der Entwicklung) |
-| `BODY_SIZE_LIMIT` | maximale Anfragegröße, im Docker-Image `80M` (Fotos und Sprachnotizen) |
+| `BODY_SIZE_LIMIT` | maximale Anfragegröße, im Docker-Image `80M` (Fotos, Sprachnotizen, Kontoauszüge, Eingangsrechnungen) |
+| `ADDRESS_HEADER` | hinter einem Reverse Proxy z. B. `X-Forwarded-For`, damit die Anmeldebegrenzung die echte Client-Adresse sieht (siehe `adapter-node`) |
 
 Produktion: `pnpm --filter @objektakte/web build` und `node apps/web/build`, oder per Docker (`apps/web/Dockerfile`, Dienst `web` in `docker-compose.yml`; dort zusätzlich `WEB_PASSWORD`, `WEB_SESSION_SECRET` und `WEB_ORIGIN` setzen).
 
 ## Anmeldung
 
 Es gibt genau einen Benutzer. Das Passwort wird in konstanter Laufzeit mit `WEB_PASSWORD` verglichen; danach setzt der Server ein signiertes Sitzungscookie (`HMAC-SHA256`, `httpOnly`, `SameSite=Lax`, in Produktion `Secure`, 30 Tage gültig). `hooks.server.ts` prüft jede Anfrage: Seiten leiten ohne Sitzung auf `/login` um, Datenpfade (`/api-proxy`, `/dokumente`) antworten mit `401`. Abmelden löscht das Cookie und die zwischengespeicherten Daten des Service Workers.
+
+Fehlgeschlagene Anmeldungen werden je Client-Adresse gezählt: nach 5 Fehlversuchen innerhalb von 15 Minuten antwortet das Login mit `429` („Zu viele Fehlversuche …“), bis das Zeitfenster abgelaufen ist. Eine erfolgreiche Anmeldung setzt den Zähler zurück. Die Begrenzung liegt im Speicher des Prozesses (ein Neustart setzt sie zurück).
 
 ## Zugriff auf die API
 
@@ -37,6 +40,19 @@ Es gibt genau einen Benutzer. Das Passwort wird in konstanter Laufzeit mit `WEB_
 ## Büro-Oberfläche
 
 Übersicht (Fristen-Digest, Inbox, Vorgänge je Status), Kontakte, Objekte (Beteiligte, Begehungen), Vorgänge als Liste mit Filtern und als Board nach Status, Vorgangsakte (Stammdaten, Förderfälle mit berechneten Fristen, Fristen und Wiedervorlagen, Chronik, Nachrichten, Dokumente, Begehungen), Fristen, Zuordnungs-Inbox (zuordnen mit „Kanal lernen“, bestätigen, ignorieren, Neuanfrage, erneut zuordnen) und Einstellungen (Kommunikation, Leistungsarten, Nummernkreise, Förderprogramme, Fristenregeln, Webhooks).
+
+## Finanzen
+
+Die Navigation gruppiert **Arbeit** (Übersicht, Vorgänge, Inbox, Fristen, Vor Ort), **Stammdaten** (Kontakte, Objekte), **Finanzen** und **Einstellungen**. Grundlagen siehe [Rechnungen](rechnungen.md) und [Zahlungen](zahlungen.md).
+
+- **Belege** (`/belege`): Liste mit Filtern nach Art, Status, Kunde und Vorgang. Der Editor für Entwürfe umfasst Kunde, Vorgang, Datumsangaben inkl. Leistungszeitraum, Leitweg-ID/Käuferreferenz, Texte, E-Rechnungsformat und Positionen (Artikel aus dem Stamm, Einheiten nach UN/ECE Rec. 20, Steuerkategorie und -satz) mit live berechneten Summen. Die Vorprüfung der API (`…/check`) steht oben auf der Seite; bei Problemen ist das Festschreiben gesperrt. Die PDF-Vorschau (`/belege/<id>/vorschau`) wird serverseitig durchgereicht.
+  **Festschreiben** verlangt eine ausdrückliche Bestätigung in einem Dialog, der erklärt, dass der Schritt nicht umkehrbar ist (GoBD). Danach zeigt die Detailansicht PDF/XML, das Prüfergebnis der E-Rechnung, offene Beträge und die Folgeaktionen: als versendet markieren, in Rechnung/neuen Entwurf umwandeln, stornieren (mit Bestätigung), Zahlungserinnerung (Stufe, Gebühr, Frist).
+  In der Vorgangsakte erscheinen alle Belege des Vorgangs mit „Angebot erstellen“ und „Rechnung erstellen“.
+- **Zahlungen** (`/zahlungen`): Kontoauszug als CSV hochladen (der Server liest die Datei – UTF-8 oder Windows-1252 – und sendet sie als `text/csv` an die API), Umsätze nach Status filtern, Vorschläge mit einem Klick übernehmen, manuell zuordnen (auch aufgeteilt auf mehrere Rechnungen), ignorieren, erneut abgleichen.
+- **Offene Posten** (`/offene-posten`): offene Rechnungen mit Hervorhebung überfälliger Posten und direkter Zahlungserinnerung. Die Übersicht zeigt Summe und Zahl der überfälligen Posten.
+- **Eingang** (`/eingang`): XRechnung-XML oder ZUGFeRD-PDF hochladen, Liste mit Status (offen, geprüft, bezahlt, abgelehnt), Originaldatei öffnen.
+- **Auswertungen** (`/auswertungen`): Umsatz je Monat nach Soll und Ist als SVG-Säulendiagramm mit Tabelle; Downloads für den DATEV-Buchungsstapel und das Monatspaket (serverseitig durchgereicht).
+- **Einstellungen**: zusätzlich Firmendaten (inkl. Kleinunternehmer, Verkäuferkennung, Nummernkreis-Muster, Standardtexte), Artikel, Bank-CSV-Zuordnung und DATEV.
 
 ## Begehung vor Ort (offline)
 
@@ -65,4 +81,4 @@ pnpm --filter @objektakte/web test        # Unit-Tests (Vitest)
 pnpm --filter @objektakte/web test:e2e    # Playwright
 ```
 
-Die E2E-Tests starten die API aus diesem Repository (Port 3100) und die gebaute Web-App (Port 4300). Die Datenbank `E2E_DATABASE_URL` (Standard: lokale `objektakte_web`) wird dabei **vollständig zurückgesetzt**; aus Sicherheitsgründen muss ihr Name `web` oder `e2e` enthalten. Ein vorhandenes Chromium lässt sich über `PLAYWRIGHT_CHROMIUM_EXECUTABLE` angeben, sonst `npx playwright install chromium`.
+Die E2E-Tests starten die API aus diesem Repository (Port 3100) und die gebaute Web-App (Port 4300). Ist `EINVOICE_VALIDATOR_URL` gesetzt (in CI der Mustang-Validator aus [`/validator`](../validator/README.md)), werden festgeschriebene Rechnungen echt geprüft, sonst läuft die API mit `EINVOICE_VALIDATION=internal`. Die Datenbank `E2E_DATABASE_URL` (Standard: lokale `objektakte_web`) wird dabei **vollständig zurückgesetzt**; aus Sicherheitsgründen muss ihr Name `web` oder `e2e` enthalten. Ein vorhandenes Chromium lässt sich über `PLAYWRIGHT_CHROMIUM_EXECUTABLE` angeben, sonst `npx playwright install chromium`.

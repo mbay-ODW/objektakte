@@ -1,7 +1,10 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { asc, eq, ilike, or } from "drizzle-orm";
+import type { Database } from "../../db/client.js";
 import { contactChannels, contacts } from "../../db/schema.js";
-import { createRouter, NotFound, Pagination, UuidParam } from "../../lib/http.js";
+import { ErrorResponse } from "../../lib/errors.js";
+import { createRouter, NotFound, Pagination, UuidParam, ValidationError } from "../../lib/http.js";
+import { ContactCreate, ContactPatch, createContact, updateContact } from "./service.js";
 
 export const Channel = z
   .object({
@@ -55,6 +58,7 @@ const toContact = (row: typeof contacts.$inferSelect): z.infer<typeof Contact> =
 const listRoute = createRoute({
   method: "get",
   path: "/contacts",
+  operationId: "listContacts",
   tags: ["Kontakte"],
   summary: "Kontakte suchen/auflisten",
   request: {
@@ -73,6 +77,7 @@ const listRoute = createRoute({
 const getRoute = createRoute({
   method: "get",
   path: "/contacts/{id}",
+  operationId: "getContact",
   tags: ["Kontakte"],
   summary: "Kontakt mit Kommunikationskanälen",
   request: { params: UuidParam },
@@ -81,6 +86,60 @@ const getRoute = createRoute({
     404: { description: "Nicht gefunden", content: { "application/json": { schema: NotFound } } },
   },
 });
+
+const createRouteDef = createRoute({
+  method: "post",
+  path: "/contacts",
+  operationId: "createContact",
+  tags: ["Kontakte"],
+  summary: "Kontakt anlegen",
+  request: { body: { required: true, content: { "application/json": { schema: ContactCreate } } } },
+  responses: {
+    201: { description: "Angelegt", content: { "application/json": { schema: ContactDetail } } },
+    400: { description: "Ungültig", content: { "application/json": { schema: ValidationError } } },
+    409: { description: "Konflikt", content: { "application/json": { schema: ErrorResponse } } },
+    422: {
+      description: "Unvollständig",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+  },
+});
+
+const patchRoute = createRoute({
+  method: "patch",
+  path: "/contacts/{id}",
+  operationId: "updateContact",
+  tags: ["Kontakte"],
+  summary: "Kontakt ändern (nicht übergebene Felder bleiben unverändert)",
+  request: {
+    params: UuidParam,
+    body: { required: true, content: { "application/json": { schema: ContactPatch } } },
+  },
+  responses: {
+    200: { description: "Geändert", content: { "application/json": { schema: ContactDetail } } },
+    400: { description: "Ungültig", content: { "application/json": { schema: ValidationError } } },
+    404: {
+      description: "Nicht gefunden",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+    409: { description: "Konflikt", content: { "application/json": { schema: ErrorResponse } } },
+  },
+});
+
+async function loadDetail(db: Database, id: string) {
+  const [row] = await db.select().from(contacts).where(eq(contacts.id, id));
+  if (!row) return undefined;
+  const channels = await db
+    .select({
+      kind: contactChannels.kind,
+      value: contactChannels.value,
+      label: contactChannels.label,
+      isPrimary: contactChannels.isPrimary,
+    })
+    .from(contactChannels)
+    .where(eq(contactChannels.contactId, id));
+  return { ...toContact(row), channels };
+}
 
 export const contactsRouter = createRouter()
   .openapi(listRoute, async (c) => {
@@ -99,18 +158,18 @@ export const contactsRouter = createRouter()
     return c.json({ items: rows.map(toContact) }, 200);
   })
   .openapi(getRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const detail = await loadDetail(c.get("db"), c.req.valid("param").id);
+    if (!detail) return c.json({ error: "not_found" as const }, 404);
+    return c.json(detail, 200);
+  })
+  .openapi(createRouteDef, async (c) => {
     const db = c.get("db");
-    const [row] = await db.select().from(contacts).where(eq(contacts.id, id));
-    if (!row) return c.json({ error: "not_found" as const }, 404);
-    const channels = await db
-      .select({
-        kind: contactChannels.kind,
-        value: contactChannels.value,
-        label: contactChannels.label,
-        isPrimary: contactChannels.isPrimary,
-      })
-      .from(contactChannels)
-      .where(eq(contactChannels.contactId, id));
-    return c.json({ ...toContact(row), channels }, 200);
+    const id = await db.transaction((tx) => createContact(tx, c.req.valid("json"), c.get("actor")));
+    return c.json((await loadDetail(db, id)) as z.infer<typeof ContactDetail>, 201);
+  })
+  .openapi(patchRoute, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await db.transaction((tx) => updateContact(tx, id, c.req.valid("json"), c.get("actor")));
+    return c.json((await loadDetail(db, id)) as z.infer<typeof ContactDetail>, 200);
   });

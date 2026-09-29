@@ -39,6 +39,9 @@ export function testClient(db: Database) {
     app,
     get: (path: string, token?: string) => request("GET", path, undefined, token),
     post: (path: string, body: unknown, token?: string) => request("POST", path, body, token),
+    patch: (path: string, body: unknown, token?: string) => request("PATCH", path, body, token),
+    put: (path: string, body: unknown, token?: string) => request("PUT", path, body, token),
+    del: (path: string, token?: string) => request("DELETE", path, undefined, token),
   };
 }
 

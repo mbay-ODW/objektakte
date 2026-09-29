@@ -2,7 +2,7 @@
 
 Fallakte für Energieberatung: Kontakte, Gebäude, Vorgänge, Förderfälle, Kommunikation und Belege an einem Ort – API-first, selbst gehostet.
 
-> Status: **Phase 0** – Datenmodell, Import-Schnittstelle, Lese-API. Siehe [Konzept](docs/konzept.md).
+> Status: in Entwicklung. Siehe [Konzept](docs/konzept.md).
 
 ## Schnellstart
 
@@ -19,6 +19,21 @@ pnpm dev                        # http://localhost:3000
 - `GET /health` – Lebenszeichen
 - `GET /openapi.json` – vollständige API-Beschreibung (OpenAPI 3.1)
 - `/api/v1/*` – API, Authentifizierung per `Authorization: Bearer <API_TOKEN>`
+- `/mcp` – MCP-Server (Streamable HTTP, gleiches Token). Jede API-Operation ist automatisch ein Tool.
+
+### MCP-Client anbinden
+
+```json
+{
+  "mcpServers": {
+    "objektakte": {
+      "type": "http",
+      "url": "https://objektakte.example.org/mcp",
+      "headers": { "Authorization": "Bearer <API_TOKEN>" }
+    }
+  }
+}
+```
 
 Mit Docker: `POSTGRES_PASSWORD=… API_TOKEN=… docker compose up -d`.
 
@@ -37,6 +52,8 @@ Schemaänderungen: `apps/api/src/db/schema.ts` anpassen, dann `pnpm --filter @ob
 
 - [Konzept und Architektur](docs/konzept.md)
 - [Import-Format](docs/import-format.md)
+- [Fristen und Förderfälle](docs/fristen.md)
+- [Ereignisse und Webhooks](docs/webhooks.md)
 
 ## Lizenz
 

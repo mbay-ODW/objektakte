@@ -3,11 +3,17 @@ import { OpenAPIHono } from "@hono/zod-openapi";
 import { bearerAuth } from "hono/bearer-auth";
 import { HTTPException } from "hono/http-exception";
 import type { Database } from "./db/client.js";
+import { DomainError, errorCode } from "./lib/errors.js";
 import type { AppEnv } from "./lib/http.js";
 import { casesRouter } from "./modules/cases/routes.js";
 import { contactsRouter } from "./modules/contacts/routes.js";
+import { fundingRouter } from "./modules/funding/routes.js";
 import { importRouter } from "./modules/import/routes.js";
+import { createMcpHandler } from "./modules/mcp/server.js";
+import type { OpenApiDocument } from "./modules/mcp/tools.js";
 import { objectsRouter } from "./modules/objects/routes.js";
+import { settingsRouter } from "./modules/settings/routes.js";
+import { webhooksRouter } from "./modules/webhooks/routes.js";
 
 export interface AppOptions {
   db: Database;
@@ -55,12 +61,41 @@ export function createApp({ db, apiToken }: AppOptions) {
   api.route("/", contactsRouter);
   api.route("/", objectsRouter);
   api.route("/", casesRouter);
+  api.route("/", fundingRouter);
+  api.route("/", settingsRouter);
+  api.route("/", webhooksRouter);
   api.route("/", importRouter);
 
   app.route("/api/v1", api);
 
+  const openApiConfig = {
+    openapi: "3.1.0",
+    info: { title: "objektakte API", version: "0.1.0" },
+  };
+  const mcp = createMcpHandler({
+    getDocument: () => app.getOpenAPI31Document(openApiConfig) as unknown as OpenApiDocument,
+    call: ({ url, method, body }) =>
+      Promise.resolve(
+        app.request(url, {
+          method,
+          body,
+          headers: {
+            authorization: `Bearer ${apiToken}`,
+            ...(body ? { "content-type": "application/json" } : {}),
+          },
+        }),
+      ),
+  });
+  app.use("/mcp", bearerAuth({ verifyToken: (token) => safeEqual(token, apiToken) }));
+  app.all("/mcp", (c) => mcp(c.req.raw));
+
   app.onError((err, c) => {
     if (err instanceof HTTPException) return err.getResponse();
+    if (err instanceof DomainError) {
+      return c.json({ error: errorCode(err.status), message: err.message }, err.status);
+    }
+    const unique = uniqueViolation(err);
+    if (unique) return c.json({ error: "conflict", message: unique }, 409);
     console.error(err);
     return c.json({ error: "internal_error" }, 500);
   });
@@ -72,4 +107,12 @@ function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
   const bb = Buffer.from(b);
   return ab.length === bb.length && timingSafeEqual(ab, bb);
+}
+
+function uniqueViolation(err: unknown): string | undefined {
+  const e = (err as { cause?: unknown })?.cause ?? err;
+  if (e && typeof e === "object" && "code" in e && e.code === "23505") {
+    return "detail" in e && typeof e.detail === "string" ? e.detail : "Eindeutigkeitsverletzung";
+  }
+  return undefined;
 }

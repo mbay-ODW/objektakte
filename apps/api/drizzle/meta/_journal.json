@@ -15,6 +15,34 @@
       "when": 1790709250131,
       "tag": "0001_events_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790710124307,
+      "tag": "0002_foerderung_fristen_webhooks",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790710125206,
+      "tag": "0003_seed_foerderprogramme",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790710486666,
+      "tag": "0004_nummernkreise",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790710510103,
+      "tag": "0005_fristen_regel_erledigt",
+      "breakpoints": true
     }
   ]
 }

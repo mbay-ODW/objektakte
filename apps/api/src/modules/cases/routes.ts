@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { and, asc, desc, eq, type SQL } from "drizzle-orm";
+import type { Database } from "../../db/client.js";
 import {
   billingDocuments,
   caseStatus,
@@ -9,7 +10,9 @@ import {
   documents,
   measureTypes,
 } from "../../db/schema.js";
-import { createRouter, NotFound, Pagination, UuidParam } from "../../lib/http.js";
+import { ErrorResponse } from "../../lib/errors.js";
+import { createRouter, NotFound, Pagination, UuidParam, ValidationError } from "../../lib/http.js";
+import { CaseCreate, CasePatch, createCase, updateCase } from "./service.js";
 
 const Status = z.enum(caseStatus.enumValues);
 
@@ -92,6 +95,7 @@ const caseColumns = {
 const listRoute = createRoute({
   method: "get",
   path: "/cases",
+  operationId: "listCases",
   tags: ["Vorgänge"],
   summary: "Vorgänge filtern/auflisten",
   request: {
@@ -113,6 +117,7 @@ const listRoute = createRoute({
 const getRoute = createRoute({
   method: "get",
   path: "/cases/{id}",
+  operationId: "getCase",
   tags: ["Vorgänge"],
   summary: "Vorgang mit Kommunikation, Dokumenten und Belegen",
   request: { params: UuidParam },
@@ -125,12 +130,58 @@ const getRoute = createRoute({
 const measureRoute = createRoute({
   method: "get",
   path: "/measure-types",
+  operationId: "listMeasureTypes",
   tags: ["Vorgänge"],
   summary: "Leistungsarten",
   responses: {
     200: {
       description: "Leistungsarten",
       content: { "application/json": { schema: z.object({ items: z.array(MeasureType) }) } },
+    },
+  },
+});
+
+const createDef = createRoute({
+  method: "post",
+  path: "/cases",
+  operationId: "createCase",
+  tags: ["Vorgänge"],
+  summary: "Vorgang anlegen (Nummer wird bei Bedarf automatisch vergeben)",
+  request: { body: { required: true, content: { "application/json": { schema: CaseCreate } } } },
+  responses: {
+    201: { description: "Angelegt", content: { "application/json": { schema: CaseDetail } } },
+    400: { description: "Ungültig", content: { "application/json": { schema: ValidationError } } },
+    409: {
+      description: "Nummer vergeben",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+    422: {
+      description: "Fachlich ungültig",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+  },
+});
+
+const patchDef = createRoute({
+  method: "patch",
+  path: "/cases/{id}",
+  operationId: "updateCase",
+  tags: ["Vorgänge"],
+  summary: "Vorgang ändern",
+  request: {
+    params: UuidParam,
+    body: { required: true, content: { "application/json": { schema: CasePatch } } },
+  },
+  responses: {
+    200: { description: "Geändert", content: { "application/json": { schema: CaseDetail } } },
+    400: { description: "Ungültig", content: { "application/json": { schema: ValidationError } } },
+    404: {
+      description: "Nicht gefunden",
+      content: { "application/json": { schema: ErrorResponse } },
+    },
+    422: {
+      description: "Fachlich ungültig",
+      content: { "application/json": { schema: ErrorResponse } },
     },
   },
 });
@@ -155,66 +206,78 @@ export const casesRouter = createRouter()
     return c.json({ items: rows }, 200);
   })
   .openapi(getRoute, async (c) => {
-    const { id } = c.req.valid("param");
+    const detail = await loadCaseDetail(c.get("db"), c.req.valid("param").id);
+    if (!detail) return c.json({ error: "not_found" as const }, 404);
+    return c.json(detail, 200);
+  })
+  .openapi(createDef, async (c) => {
     const db = c.get("db");
-    const [row] = await db
-      .select(caseColumns)
-      .from(cases)
-      .innerJoin(contacts, eq(contacts.id, cases.customerId))
-      .where(eq(cases.id, id));
-    if (!row) return c.json({ error: "not_found" as const }, 404);
-
-    const [comms, docs, billing] = await Promise.all([
-      db
-        .select({
-          id: communications.id,
-          channel: communications.channel,
-          direction: communications.direction,
-          occurredAt: communications.occurredAt,
-          subject: communications.subject,
-          body: communications.body,
-          author: communications.author,
-        })
-        .from(communications)
-        .where(eq(communications.caseId, id))
-        .orderBy(desc(communications.occurredAt))
-        .limit(500),
-      db
-        .select({
-          id: documents.id,
-          title: documents.title,
-          docClass: documents.docClass,
-          storage: documents.storage,
-          location: documents.location,
-        })
-        .from(documents)
-        .where(eq(documents.caseId, id))
-        .orderBy(asc(documents.title)),
-      db
-        .select({
-          id: billingDocuments.id,
-          type: billingDocuments.type,
-          number: billingDocuments.number,
-          issueDate: billingDocuments.issueDate,
-          grossCents: billingDocuments.grossCents,
-          status: billingDocuments.status,
-        })
-        .from(billingDocuments)
-        .where(eq(billingDocuments.caseId, id))
-        .orderBy(asc(billingDocuments.issueDate)),
-    ]);
-
-    return c.json(
-      {
-        ...row,
-        communications: comms.map((m) => ({ ...m, occurredAt: m.occurredAt.toISOString() })),
-        documents: docs,
-        billingDocuments: billing,
-      },
-      200,
-    );
+    const id = await db.transaction((tx) => createCase(tx, c.req.valid("json"), c.get("actor")));
+    return c.json((await loadCaseDetail(db, id)) as z.infer<typeof CaseDetail>, 201);
+  })
+  .openapi(patchDef, async (c) => {
+    const db = c.get("db");
+    const { id } = c.req.valid("param");
+    await db.transaction((tx) => updateCase(tx, id, c.req.valid("json"), c.get("actor")));
+    return c.json((await loadCaseDetail(db, id)) as z.infer<typeof CaseDetail>, 200);
   })
   .openapi(measureRoute, async (c) => {
     const items = await c.get("db").select().from(measureTypes).orderBy(asc(measureTypes.code));
     return c.json({ items }, 200);
   });
+
+export async function loadCaseDetail(db: Database, id: string) {
+  const [row] = await db
+    .select(caseColumns)
+    .from(cases)
+    .innerJoin(contacts, eq(contacts.id, cases.customerId))
+    .where(eq(cases.id, id));
+  if (!row) return undefined;
+
+  const [comms, docs, billing] = await Promise.all([
+    db
+      .select({
+        id: communications.id,
+        channel: communications.channel,
+        direction: communications.direction,
+        occurredAt: communications.occurredAt,
+        subject: communications.subject,
+        body: communications.body,
+        author: communications.author,
+      })
+      .from(communications)
+      .where(eq(communications.caseId, id))
+      .orderBy(desc(communications.occurredAt))
+      .limit(500),
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        docClass: documents.docClass,
+        storage: documents.storage,
+        location: documents.location,
+      })
+      .from(documents)
+      .where(eq(documents.caseId, id))
+      .orderBy(asc(documents.title)),
+    db
+      .select({
+        id: billingDocuments.id,
+        type: billingDocuments.type,
+        number: billingDocuments.number,
+        issueDate: billingDocuments.issueDate,
+        grossCents: billingDocuments.grossCents,
+        status: billingDocuments.status,
+      })
+      .from(billingDocuments)
+      .where(eq(billingDocuments.caseId, id))
+      .orderBy(asc(billingDocuments.issueDate)),
+  ]);
+
+  return {
+    ...row,
+    communications: comms.map((m) => ({ ...m, occurredAt: m.occurredAt.toISOString() })),
+    documents: docs,
+    billingDocuments: billing,
+  };
+}

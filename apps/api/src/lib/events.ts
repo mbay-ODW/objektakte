@@ -7,7 +7,12 @@ export type EntityType =
   | "case"
   | "communication"
   | "document"
-  | "billing_document";
+  | "billing_document"
+  | "funding_case"
+  | "deadline"
+  | "deadline_rule"
+  | "inspection"
+  | "bank_transaction";
 
 export interface EventInput {
   entityType: EntityType;

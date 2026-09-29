@@ -386,3 +386,148 @@ export const events = pgTable(
     index("events_type_idx").on(t.type, t.id),
   ],
 );
+
+// ---------------------------------------------------------------------------
+// Förderung und Fristen
+// ---------------------------------------------------------------------------
+
+/** Förderprogramme (Stammdaten, frei erweiterbar). */
+export const fundingPrograms = pgTable("funding_programs", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  /** Standard-Bewilligungszeitraum in Monaten ab Zusage (falls kein Datum im Bescheid). */
+  approvalPeriodMonths: integer("approval_period_months"),
+  active: boolean("active").notNull().default(true),
+});
+
+export const fundingCases = pgTable(
+  "funding_cases",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    programCode: text("program_code")
+      .notNull()
+      .references(() => fundingPrograms.code, { onDelete: "restrict" }),
+    /** Richtlinienstand, z. B. "2023-12-21" oder "2026-07-21". */
+    guideline: text("guideline"),
+    applicationId: text("application_id"),
+    tpbId: text("tpb_id"),
+    tpbCreatedAt: date("tpb_created_at"),
+    bzaCreatedAt: date("bza_created_at"),
+    appliedAt: date("applied_at"),
+    approvedAt: date("approved_at"),
+    /** Ende des Bewilligungszeitraums laut Bescheid; leer = aus Programm-Standard berechnet. */
+    approvalValidUntil: date("approval_valid_until"),
+    measureCompletedAt: date("measure_completed_at"),
+    tpnId: text("tpn_id"),
+    tpnCreatedAt: date("tpn_created_at"),
+    proofSubmittedAt: date("proof_submitted_at"),
+    paidOutAt: date("paid_out_at"),
+    isfpDate: date("isfp_date"),
+    eligibleCostsCents: bigint("eligible_costs_cents", { mode: "number" }),
+    approvedAmountCents: bigint("approved_amount_cents", { mode: "number" }),
+    ratePercent: numeric("rate_percent", { precision: 5, scale: 2 }),
+    bonuses: text("bonuses").array().notNull().default(sql`'{}'::text[]`),
+    notes: text("notes"),
+    ...timestamps,
+  },
+  (t) => [index("funding_cases_case_idx").on(t.caseId)],
+);
+
+/** Datumsfelder eines Förderfalls, an denen Fristenregeln ansetzen können. */
+export const fundingAnchor = pgEnum("funding_anchor", [
+  "tpb_created_at",
+  "bza_created_at",
+  "applied_at",
+  "approved_at",
+  "approval_valid_until",
+  "measure_completed_at",
+  "tpn_created_at",
+  "proof_submitted_at",
+  "isfp_date",
+]);
+
+/** Fristenregeln als Daten: Frist = Anker + Versatz; erledigt, sobald `done_when` gesetzt ist. */
+export const deadlineRules = pgTable("deadline_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  /** Programmcode oder "*" für alle Programme. */
+  programCode: text("program_code").notNull(),
+  /** Richtlinienstand; null = alle. */
+  guideline: text("guideline"),
+  anchor: fundingAnchor("anchor").notNull(),
+  offsetMonths: integer("offset_months").notNull().default(0),
+  offsetDays: integer("offset_days").notNull().default(0),
+  /** Vorlauf für Erinnerungen in Tagen. */
+  leadDays: integer("lead_days").notNull().default(30),
+  doneWhen: fundingAnchor("done_when"),
+  title: text("title").notNull(),
+  description: text("description"),
+  /** Quelle/Beleg der Regel (Richtlinie, Merkblatt …). */
+  sourceNote: text("source_note"),
+  active: boolean("active").notNull().default(true),
+  ...timestamps,
+});
+
+export const deadlineStatus = pgEnum("deadline_status", ["offen", "erledigt", "verworfen"]);
+
+export const deadlines = pgTable(
+  "deadlines",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caseId: uuid("case_id").references(() => cases.id, { onDelete: "cascade" }),
+    fundingCaseId: uuid("funding_case_id").references(() => fundingCases.id, {
+      onDelete: "cascade",
+    }),
+    ruleId: uuid("rule_id").references(() => deadlineRules.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    dueDate: date("due_date").notNull(),
+    remindFrom: date("remind_from"),
+    status: deadlineStatus("status").notNull().default("offen"),
+    completedAt: date("completed_at"),
+    /** true = durch die Regel (done_when) erledigt, nicht manuell; wird bei Wegfall wieder geöffnet. */
+    completedByRule: boolean("completed_by_rule").notNull().default(false),
+    note: text("note"),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("deadlines_rule_uq")
+      .on(t.fundingCaseId, t.ruleId)
+      .where(sql`${t.ruleId} is not null`),
+    index("deadlines_due_idx").on(t.status, t.dueDate),
+    index("deadlines_case_idx").on(t.caseId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Webhooks (Verteilung des Ereignisprotokolls)
+// ---------------------------------------------------------------------------
+
+export const webhookSubscriptions = pgTable("webhook_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  url: text("url").notNull(),
+  /** HMAC-SHA256-Schlüssel für die Signatur (Header X-Objektakte-Signature). */
+  secret: text("secret").notNull(),
+  /** Ereignistyp-Muster, z. B. "case.*", "deadline.*" oder "*". */
+  eventTypes: text("event_types").array().notNull().default(sql`'{*}'::text[]`),
+  active: boolean("active").notNull().default(true),
+  /** Letzte erfolgreich zugestellte Ereignis-ID (Cursor). */
+  lastEventId: bigint("last_event_id", { mode: "number" }).notNull().default(0),
+  failures: integer("failures").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  lastError: text("last_error"),
+  ...timestamps,
+});
+
+// ---------------------------------------------------------------------------
+// Nummernkreise (Vorgänge, später Belege)
+// ---------------------------------------------------------------------------
+
+/** Lückenlose Nummernkreise; Vergabe nur per SELECT … FOR UPDATE innerhalb einer Transaktion. */
+export const numberSequences = pgTable("number_sequences", {
+  key: text("key").primaryKey(),
+  nextValue: bigint("next_value", { mode: "number" }).notNull().default(1),
+  padding: integer("padding").notNull().default(0),
+  ...timestamps,
+});

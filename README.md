@@ -35,7 +35,16 @@ pnpm dev                        # http://localhost:3000
 }
 ```
 
-Mit Docker: `POSTGRES_PASSWORD=… API_TOKEN=… docker compose up -d`.
+Mit Docker: `POSTGRES_PASSWORD=… API_TOKEN=… WEB_PASSWORD=… WEB_SESSION_SECRET=… WEB_ORIGIN=… docker compose up -d`.
+
+### Web-Oberfläche
+
+Büro-Oberfläche und offline-fähige Begehungs-App unter `apps/web` (SvelteKit), siehe [docs/web.md](docs/web.md):
+
+```bash
+cd apps/web
+API_URL=http://localhost:3000 API_TOKEN=… WEB_PASSWORD=… WEB_SESSION_SECRET=… pnpm dev
+```
 
 ## Entwicklung
 
@@ -56,6 +65,7 @@ Schemaänderungen: `apps/api/src/db/schema.ts` anpassen, dann `pnpm --filter @ob
 - [Ereignisse und Webhooks](docs/webhooks.md)
 - [Kommunikation und Zuordnung](docs/kommunikation.md)
 - [Begehung vor Ort](docs/begehung.md)
+- [Web-Oberfläche und PWA „Vor Ort“](docs/web.md)
 
 ## Lizenz
 

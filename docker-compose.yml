@@ -36,6 +36,25 @@ services:
     ports:
       - "${API_PORT:-3000}:3000"
 
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:3000
+      API_TOKEN: ${API_TOKEN:?API_TOKEN setzen}
+      WEB_PASSWORD: ${WEB_PASSWORD:?WEB_PASSWORD setzen}
+      WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:?WEB_SESSION_SECRET setzen (mind. 32 Zeichen)}
+      # Öffentliche Adresse der Oberfläche (für CSRF-Prüfung und Cookies), z. B. https://akte.example.org
+      ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN setzen}
+      # Große Fotos/Sprachnotizen über den Proxy erlauben
+      BODY_SIZE_LIMIT: 80M
+    ports:
+      - "${WEB_PORT:-3001}:3000"
+
   gotenberg:
     image: gotenberg/gotenberg:8
     restart: unless-stopped

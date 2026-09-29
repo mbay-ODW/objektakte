@@ -37,3 +37,7 @@ Schemaänderungen: `apps/api/src/db/schema.ts` anpassen, dann `pnpm --filter @ob
 
 - [Konzept und Architektur](docs/konzept.md)
 - [Import-Format](docs/import-format.md)
+
+## Lizenz
+
+[GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`). Wer objektakte verändert und als Netzwerkdienst anbietet, muss den Nutzern den Quelltext der geänderten Fassung zugänglich machen.

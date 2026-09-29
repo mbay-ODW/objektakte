@@ -24,7 +24,11 @@ describe("Auth", () => {
     expect(health.status).toBe(200);
     const spec = await client.app.request("/openapi.json");
     expect(spec.status).toBe(200);
-    const json = (await spec.json()) as { paths: Record<string, unknown> };
+    const json = (await spec.json()) as {
+      paths: Record<string, unknown>;
+      info: { license: { name: string } };
+    };
+    expect(json.info.license.name).toBe("AGPL-3.0-only");
     expect(Object.keys(json.paths)).toEqual(
       expect.arrayContaining([
         "/api/v1/contacts",

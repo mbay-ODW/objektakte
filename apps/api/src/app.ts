@@ -27,6 +27,8 @@ export function createApp({ db, apiToken }: AppOptions) {
       version: "0.1.0",
       description:
         "Fallakte für Energieberatung: Kontakte, Objekte, Vorgänge, Kommunikation, Belege.",
+      // AGPL-3.0 §13: Nutzer über das Netzwerk müssen den Quelltext erhalten können.
+      license: { name: "AGPL-3.0-only", url: "https://github.com/mbay-ODW/objektakte" },
     },
   });
   app.openAPIRegistry.registerComponent("securitySchemes", "bearer", {

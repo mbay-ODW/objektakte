@@ -28,7 +28,7 @@ Quellen: E-Mail · Messenger · Bank · Dokumentenablage · Dateiablage
 │         documents(ref) · inspections · billing · payments           │
 │ API: REST/OpenAPI  ──►  MCP-Server (gleiches Repo)                  │
 │ UI: Büro-Oberfläche + PWA „Vor Ort“ (offline)                       │
-│ Sidecars: Whisper · Gotenberg · E-Rechnungs-Validator (KoSIT)       │
+│ Sidecars: Whisper · Gotenberg · E-Rechnungs-Validator (Mustang)     │
 │ events (append-only) ──► outbox ──► Webhooks                        │
 └───────────────┬─────────────────────────────────────────────────────┘
                 ▼
@@ -48,7 +48,7 @@ Im Nichtwohngebäude-Kontext (Kommunen, Unternehmen) ist die E-Rechnung Pflicht.
 - **E-Rechnung:** kanonisches Rechnungsmodell nach EN 16931, daraus
   - **XRechnung** (CII/UBL) für öffentliche Auftraggeber mit Leitweg-ID,
   - **ZUGFeRD/Factur-X** (Profil EN16931) als PDF/A-3 mit eingebettetem XML.
-  Validierung mit dem KoSIT-Validator **vor** dem Festschreiben; ungültige Rechnungen lassen sich nicht festschreiben.
+  Das PDF/A-3 wird direkt in der Anwendung erzeugt (eingebettete Schriften, ICC-Profil, XMP-Metadaten), damit Aufbau und Konformität vollständig testbar sind. Validierung **vor** dem Festschreiben durch den Mustang-Validator (EN 16931, XRechnung, PDF/A-3 per veraPDF); ungültige Rechnungen lassen sich nicht festschreiben.
 - **Eingangsrechnungen:** strukturierte E-Rechnungen werden geparst (XML vor PDF-Text).
 - **Export:** DATEV-Buchungsstapel und Beleg-Archiv je Monat für die Steuerberatung.
 - **Bankabgleich:** Kontoumsätze werden gegen offene Posten gematcht; „bezahlt“ ist ein Faktum, kein Häkchen.
@@ -63,11 +63,13 @@ Im Nichtwohngebäude-Kontext (Kommunen, Unternehmen) ist die E-Rechnung Pflicht.
 
 ## Ausbaustufen
 
-| Phase | Inhalt |
-|---|---|
-| 0 | Grundgerüst, Datenmodell, neutrale Import-Schnittstelle, CI |
-| 1 | Förderfall, Fristen-Engine, MCP-Server, Webhook-Outbox |
-| 2 | Kommunikations-Timeline mit automatischer Zuordnung und Zuordnungs-Inbox |
-| 3 | Vorgänge mit abgeleitetem Status, Büro-UI, PWA Begehung mit Sprachnotizen |
-| 4 | Bankabgleich, Offene Posten, Auswertungen, Buchhaltungsexport |
-| 5 | Rechnungsstellung mit E-Rechnung (XRechnung/ZUGFeRD), GoBD-Festschreibung, Mahnwesen |
+| Phase | Inhalt | Stand |
+|---|---|---|
+| 0 | Grundgerüst, Datenmodell, neutrale Import-Schnittstelle, CI | umgesetzt |
+| 1 | Förderfall, Fristen-Engine, MCP-Server, Webhooks | umgesetzt |
+| 2 | Kommunikations-Timeline mit automatischer Zuordnung und Zuordnungs-Inbox | umgesetzt |
+| 3 | Begehung (API + offline-fähige PWA mit Sprachnotizen), Büro-Oberfläche | umgesetzt |
+| 4 | Bankabgleich, Offene Posten, abgeleiteter Status, Auswertungen, DATEV-Export | umgesetzt |
+| 5 | Rechnungsstellung mit E-Rechnung (XRechnung/ZUGFeRD), GoBD-Festschreibung, Mahnwesen, Eingangsrechnungen | umgesetzt |
+
+Bewusst noch offen: strukturierte Feldvorschläge aus Sprachnotizen per KI, Versand von Belegen direkt aus der Anwendung (derzeit über Download bzw. Webhook an einen Mail-Workflow), Peppol-Versand, OIDC-Anmeldung.

@@ -2,7 +2,7 @@
 
 Fallakte für Energieberatung: Kontakte, Gebäude, Vorgänge, Förderfälle, Kommunikation und Belege an einem Ort – API-first, selbst gehostet.
 
-> Status: in Entwicklung. Siehe [Konzept](docs/konzept.md).
+> Status: Ausbaustufen 0–5 umgesetzt (siehe [Konzept](docs/konzept.md)). Vor produktiver Nutzung: Firmendaten, Nummernkreise, Fristenregeln und DATEV-Export prüfen.
 
 ## Schnellstart
 

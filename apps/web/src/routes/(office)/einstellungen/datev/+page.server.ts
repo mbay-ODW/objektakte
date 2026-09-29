@@ -26,6 +26,7 @@ export const actions: Actions = {
         debtorAccount: int(fd, "debtorAccount") ?? 10000,
         revenueAccounts: {
           standard: int(fd, "revStandard") ?? 8400,
+          reduced: int(fd, "revReduced") ?? 8300,
           reverseCharge: int(fd, "revReverseCharge") ?? 8337,
           exempt: int(fd, "revExempt") ?? 8100,
         },

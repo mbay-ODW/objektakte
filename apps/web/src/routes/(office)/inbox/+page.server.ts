@@ -7,7 +7,7 @@ import type { Actions, PageServerLoad } from "./$types";
 export const load: PageServerLoad = async () => {
   const client = api();
   const [inbox, cases, measures] = await Promise.all([
-    client.GET("/api/v1/communications/inbox", { params: { query: { includeAutomatic: true } } }),
+    client.GET("/api/v1/communications/inbox", { params: { query: { includeAutomatic: "true" } } }),
     client.GET("/api/v1/cases", { params: { query: { limit: 500, offset: 0 } } }),
     client.GET("/api/v1/measure-types"),
   ]);

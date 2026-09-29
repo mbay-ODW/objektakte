@@ -5,7 +5,7 @@ export const load: PageServerLoad = async () => {
   const client = api();
   const [digest, inbox, cases, receivables] = await Promise.all([
     client.GET("/api/v1/deadlines/digest", { params: { query: { days: 14 } } }),
-    client.GET("/api/v1/communications/inbox", { params: { query: { includeAutomatic: true } } }),
+    client.GET("/api/v1/communications/inbox", { params: { query: { includeAutomatic: "true" } } }),
     client.GET("/api/v1/cases", { params: { query: { limit: 500, offset: 0 } } }),
     client.GET("/api/v1/receivables", { params: { query: {} } }),
   ]);

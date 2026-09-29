@@ -1955,6 +1955,12 @@ export interface components {
             paymentTermsText?: string | null;
             /** @enum {string} */
             eInvoiceFormat?: "zugferd" | "xrechnung" | "keine";
+            exemptionReasons?: {
+                E?: string;
+                Z?: string;
+                AE?: string;
+                O?: string;
+            };
             prepaidCents?: number | null;
             lines: components["schemas"]["BillingLineInput"][];
         };
@@ -1991,6 +1997,12 @@ export interface components {
             paymentTermsText?: string | null;
             /** @enum {string} */
             eInvoiceFormat?: "zugferd" | "xrechnung" | "keine";
+            exemptionReasons?: {
+                E?: string;
+                Z?: string;
+                AE?: string;
+                O?: string;
+            };
             prepaidCents?: number | null;
             lines?: components["schemas"]["BillingLineInput"][];
         };
@@ -2267,6 +2279,7 @@ export interface components {
             /**
              * @default {
              *       "standard": 8400,
+             *       "reduced": 8300,
              *       "reverseCharge": 8337,
              *       "exempt": 8100
              *     }
@@ -2274,6 +2287,8 @@ export interface components {
             revenueAccounts: {
                 /** @default 8400 */
                 standard: number;
+                /** @default 8300 */
+                reduced: number;
                 /** @default 8337 */
                 reverseCharge: number;
                 /** @default 8100 */
@@ -3624,7 +3639,7 @@ export interface operations {
     communicationInbox: {
         parameters: {
             query?: {
-                includeAutomatic?: boolean | null;
+                includeAutomatic?: "0" | "1" | "true" | "false";
             };
             header?: never;
             path?: never;
@@ -5813,7 +5828,7 @@ export interface operations {
     listReceivables: {
         parameters: {
             query?: {
-                overdueOnly?: boolean | null;
+                overdueOnly?: "0" | "1" | "true" | "false";
                 today?: string;
             };
             header?: never;

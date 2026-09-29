@@ -33,6 +33,7 @@
     <label>Bankkonto <input name="bankAccount" type="number" value={d.bankAccount} /></label>
     <label>Sammeldebitor <input name="debtorAccount" type="number" value={d.debtorAccount} /></label>
     <label>Erlöse Regelsteuersatz <input name="revStandard" type="number" value={d.revenueAccounts.standard} /></label>
+    <label>Erlöse 7 % <input name="revReduced" type="number" value={d.revenueAccounts.reduced} /></label>
     <label>Erlöse Reverse Charge <input name="revReverseCharge" type="number" value={d.revenueAccounts.reverseCharge} /></label>
     <label>Erlöse steuerfrei <input name="revExempt" type="number" value={d.revenueAccounts.exempt} /></label>
   </div>

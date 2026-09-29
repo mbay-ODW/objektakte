@@ -5,9 +5,8 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async ({ url }) => {
   const overdueOnly = url.searchParams.get("ueberfaellig") === "1";
-  // overdueOnly nur senden, wenn gesetzt: die API wertet jeden übergebenen Wert als wahr.
   const res = await api().GET("/api/v1/receivables", {
-    params: { query: overdueOnly ? { overdueOnly: true } : {} },
+    params: { query: { overdueOnly: overdueOnly ? "true" : "false" } },
   });
   return { ...must(res), overdueOnly };
 };

@@ -16,11 +16,10 @@ Muster und Startwerte: `PUT /api/v1/settings/company` (`numberPatterns`) bzw. `P
 1. **Entwurf** anlegen: `POST /api/v1/billing-documents` (Positionen frei oder aus dem Artikelstamm `PUT /api/v1/articles/{code}`).
 2. **Prüfen**: `GET …/{id}/check` (Summen und fehlende Pflichtangaben) und `GET …/{id}/preview` (PDF mit Vermerk „Entwurf“).
 3. **Festschreiben**: `POST …/{id}/finalize`
-   - vergibt die Nummer (lückenlos, Sperre auf dem Nummernkreis),
-   - erzeugt die E-Rechnung und prüft sie **vor** dem Speichern mit dem Validator,
-   - erzeugt das PDF/A-3 und legt die Dateien in der Ablage ab,
+   - erzeugt E-Rechnung und PDF/A-3 zunächst mit einer Prüfnummer und lässt sie vom Validator prüfen – ohne den Nummernkreis zu sperren,
+   - vergibt danach in einer kurzen Transaktion die Nummer (lückenlos), erzeugt den Beleg endgültig (identischer Inhalt, nur Nummer/Zahlungsreferenz) und legt die Dateien ab,
    - speichert einen SHA-256-Inhaltsnachweis.
-   Scheitert eine Prüfung, wird alles zurückgerollt – auch die Nummer.
+   Wurden Entwurf oder Firmendaten während der Prüfung geändert, bricht das Festschreiben ab. Scheitert ein Schritt, wird alles zurückgerollt – auch die Nummer – und bereits abgelegte Dateien werden wieder entfernt. Ist der Validator nicht erreichbar, antwortet die API mit 503.
 4. **Versand** vermerken: `POST …/{id}/sent`.
 5. **Folgebelege**: `…/convert` (z. B. Angebot → Rechnung), `…/cancel` (Stornorechnung), `…/reminder` (Zahlungserinnerung/Mahnung für offene Rechnungen).
 
@@ -34,9 +33,10 @@ Beide Formate entstehen aus einem gemeinsamen Rechnungsmodell nach EN 16931 (UN/
 Pflichtangaben, die vor dem Festschreiben geprüft werden (Auszug): Firmendaten mit USt-IdNr. oder Steuernummer, für XRechnung zusätzlich Ansprechpartner, Telefon, E-Mail, IBAN, Leitweg-ID und die E-Mail-Adresse des Auftraggebers (elektronische Adresse, BT-49).
 
 Sonderfälle:
-- **Kleinunternehmer (§ 19 UStG)**: `smallBusiness: true` – Positionen werden steuerfrei (Kategorie E) mit Pflichthinweis; da keine USt-IdNr. vorliegt, ist eine Verkäuferkennung (`sellerId`, BT-29) nötig.
+- **Kleinunternehmer (§ 19 UStG)**: `smallBusiness: true` – Positionen werden steuerfrei (Kategorie E) mit Pflichthinweis, auch bei Entwürfen, die vor dem Umschalten angelegt wurden; da keine USt-IdNr. vorliegt, ist eine Verkäuferkennung (`sellerId`, BT-29) nötig.
 - **Reverse Charge (§ 13b UStG)**: Kategorie AE mit USt-IdNr. beider Parteien.
-- **Schlussrechnung**: bereits festgeschriebene Abschlagsrechnungen desselben Vorgangs werden automatisch als bereits berechnet (BT-113) abgezogen.
+- **Schlussrechnung**: bereits festgeschriebene Abschlagsrechnungen desselben Vorgangs werden automatisch abgesetzt – je Abschlag mit Entgelt und Umsatzsteuer (§ 14 Abs. 5 UStG) im PDF und in der E-Rechnung (BT-113, Hinweistext). Offene Posten, Mahnungen, Umsatz und DATEV rechnen mit dem Betrag nach Abzug. Ein abgezogener Abschlag kann erst storniert werden, wenn die Schlussrechnung storniert ist.
+- **Steuerbefreiung/nicht steuerbar**: Befreiungsgründe je Kategorie über `exemptionReasons` (z. B. `{ "E": "Steuerfrei nach § 4 Nr. … UStG" }`); nicht steuerbare Positionen (O) dürfen nicht mit anderen Kategorien gemischt werden.
 - **Storno**: Stornorechnung (Typ 381) mit Bezug auf die ursprüngliche Rechnung (BT-25); die Originalrechnung erhält den Status „storniert“.
 
 ### Validator

@@ -10,20 +10,21 @@ Diese Beschreibung dokumentiert, wie objektakte Belege erzeugt, festschreibt und
 
 ## 2. Unveränderbarkeit
 
-- Festgeschriebene eigene Belege und ihre Positionen können weder geändert noch gelöscht werden. Dies wird durch Datenbank-Trigger erzwungen, unabhängig von der Anwendung.
+- Festgeschriebene eigene Belege und ihre Positionen können weder geändert, gelöscht noch umgehängt werden. Dies wird durch Datenbank-Trigger erzwungen, unabhängig von der Anwendung.
+- Empfehlung für den Betrieb: Migrationen mit dem Eigentümer-Konto der Datenbank ausführen, die Anwendung aber mit einer Rolle ohne Eigentümerrechte betreiben – dann kann sie die Trigger nicht deaktivieren.
 - Zulässig sind ausschließlich der Versandvermerk sowie die Statusfolge *festgeschrieben → versendet → storniert*.
 - Korrekturen erfolgen durch Stornorechnung mit Bezug auf den ursprünglichen Beleg und ggf. einen neuen Beleg.
 - Beim Festschreiben wird ein SHA-256-Hash über den kanonischen Rechnungsinhalt, das PDF und die XML gespeichert; außerdem Momentaufnahmen der Verkäufer- und Käuferdaten.
 
 ## 3. Protokollierung
 
-- Jede fachliche Änderung (Anlage, Änderung, Festschreiben, Versand, Storno, Zahlungszuordnung) wird im Ereignisprotokoll mit Zeitpunkt und Akteur gespeichert.
+- Jede fachliche Änderung (Anlage, Änderung, Festschreiben, Versand, Storno, Zahlungszuordnung, Änderungen an Firmendaten und Nummernkreisen) wird im Ereignisprotokoll mit Zeitpunkt und Akteur gespeichert.
 - Das Ereignisprotokoll ist append-only; UPDATE, DELETE und TRUNCATE werden durch Trigger verhindert.
 
 ## 4. E-Rechnung
 
 - Rechnungen werden als ZUGFeRD/Factur-X (PDF/A-3 mit eingebetteter XML, EN 16931) oder XRechnung 3.0 erzeugt. Maßgeblich ist der strukturierte Teil (XML).
-- Vor dem Festschreiben wird die E-Rechnung durch einen Validator geprüft (EN 16931, XRechnung, PDF/A). Das Prüfergebnis wird am Beleg gespeichert.
+- Vor dem Festschreiben wird die E-Rechnung durch einen Validator geprüft (EN 16931, XRechnung, PDF/A). Geprüft wird die vollständig aufbereitete Fassung mit einer Prüfnummer; die festgeschriebene Fassung unterscheidet sich davon nur in Belegnummer und Zahlungsreferenz. Das Prüfergebnis wird am Beleg gespeichert.
 - Empfangene E-Rechnungen werden unverändert im Original abgelegt und ausgelesen.
 
 ## 5. Aufbewahrung

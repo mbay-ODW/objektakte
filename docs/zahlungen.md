@@ -13,16 +13,16 @@ Für jeden Zahlungseingang werden Vorschläge gegen die offenen Posten berechnet
 
 | Fall | Score |
 |---|---|
-| Belegnummer im Verwendungszweck (Schreibweise egal: `RE-2026-239`, `RE 2026 239`), Betrag passt | 0,97 |
+| Belegnummer im Verwendungszweck (Trennzeichen egal: `RE-2026-239`, `RE 2026 239`; nur an Wortgrenzen – `RE-2026-17` passt nicht zu `RE-2026-1`), Betrag passt | 0,97 |
 | mehrere Belegnummern, Summe passt exakt | 0,9 je Beleg |
 | Belegnummer, Teilzahlung | 0,8 |
 | nur Betrag passt, Name ähnlich | 0,55 – 0,9 |
 
-Ab `autoAllocateThreshold` (Standard 0,8) und nur bei eindeutigem Treffer wird automatisch zugeordnet; sonst bleiben die Vorschläge am Umsatz stehen. Manuell: `POST /api/v1/bank/transactions/{id}/allocate` (Teilbeträge, Aufteilung auf mehrere Rechnungen, Lösen), `…/ignore`, `POST /api/v1/bank/rematch`.
+Ab `autoAllocateThreshold` (Standard 0,8) und nur bei eindeutigem Treffer wird automatisch zugeordnet; sonst bleiben die Vorschläge am Umsatz stehen. Nur Zahlungseingänge können Rechnungen zugeordnet werden; Umsatz und Rechnungen werden dabei gesperrt, sodass parallele Zuordnungen nicht überbuchen. Manuell: `POST /api/v1/bank/transactions/{id}/allocate` (Teilbeträge, Aufteilung auf mehrere Rechnungen, Lösen), `…/ignore`, `POST /api/v1/bank/rematch`.
 
 ## Offene Posten und Vorgangsstatus
 
-`GET /api/v1/receivables` listet festgeschriebene/versendete Rechnungen abzüglich zugeordneter Zahlungen, inklusive Verzug in Tagen.
+`GET /api/v1/receivables` listet festgeschriebene/versendete Rechnungen abzüglich zugeordneter Zahlungen, inklusive Verzug in Tagen. Bei Schlussrechnungen zählt nur der Betrag nach Abzug der Abschläge.
 
 Der **Vorgangsstatus wird aus Belegen und Zahlungen abgeleitet**, solange er nicht manuell gesetzt wurde:
 
@@ -44,5 +44,5 @@ Manuelles Setzen (`PATCH /cases/{id}` mit `status`) markiert den Status als übe
 
 ## Export für die Steuerberatung
 
-- `GET /api/v1/exports/datev?from=…&to=…` – DATEV-Buchungsstapel (EXTF 700, Windows-1252). Einstellungen unter `PUT /api/v1/settings/datev`: Berater-/Mandantennummer, Kontenlänge, Modus `ist` (Bank an Erlöse bei Zahlung) oder `soll` (Debitor an Erlöse bei Rechnung, Bank an Debitor bei Zahlung), Konten (Standard SKR03: Bank 1200, Sammeldebitor 10000, Erlöse 8400/8337/8100 als Automatikkonten). **Vor produktiver Nutzung einen Probeimport mit der Steuerberatung abstimmen.**
+- `GET /api/v1/exports/datev?from=…&to=…` – DATEV-Buchungsstapel (EXTF 700, Windows-1252). Einstellungen unter `PUT /api/v1/settings/datev`: Berater-/Mandantennummer, Beginn des Wirtschaftsjahres, Kontenlänge, Modus `ist` (Bank an Erlöse bei Zahlung) oder `soll` (Debitor an Erlöse bei Rechnung, Bank an Debitor bei Zahlung), Konten (Standard SKR03: Bank 1200, Sammeldebitor 10000, Erlöse 19 % 8400, 7 % 8300, Reverse Charge 8337, steuerfrei 8100 als Automatikkonten). Gebucht wird **je Steuersatz/-kategorie** des Belegs; Stornorechnungen und Gutschriften im Haben; Schlussrechnungen nur mit dem Betrag nach Abzug der Abschläge. Ein Stapel darf nur ein Wirtschaftsjahr umfassen. **Vor produktiver Nutzung einen Probeimport mit der Steuerberatung abstimmen.**
 - `GET /api/v1/exports/monthly?month=YYYY-MM` – ZIP mit DATEV-Stapel, Rechnungsausgangsliste, Zahlungseingängen, offenen Posten und allen Rechnungs-PDFs aus der Ablage; `hinweise.txt` nennt fehlende Belege.

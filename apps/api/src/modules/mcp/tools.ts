@@ -15,6 +15,8 @@ interface OpenApiParameter {
 
 interface OpenApiOperation {
   operationId?: string;
+  /** false = nicht als MCP-Tool anbieten (z. B. Datei-Up-/Downloads) */
+  "x-mcp"?: boolean;
   summary?: string;
   description?: string;
   parameters?: OpenApiParameter[];
@@ -57,7 +59,7 @@ export function buildTools(doc: OpenApiDocument): ToolDefinition[] {
   for (const [path, item] of Object.entries(doc.paths ?? {})) {
     for (const method of METHODS) {
       const op = item[method];
-      if (!op?.operationId) continue;
+      if (!op?.operationId || op["x-mcp"] === false) continue;
       const properties: Record<string, JsonSchema> = {};
       const required: string[] = [];
       const pathParams: string[] = [];

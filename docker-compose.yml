@@ -24,8 +24,22 @@ services:
       DATABASE_URL: postgres://objektakte:${POSTGRES_PASSWORD}@db:5432/objektakte
       API_TOKEN: ${API_TOKEN:?API_TOKEN setzen}
       PORT: "3000"
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      STORAGE_DIR: /data/files
+      NEXTCLOUD_URL: ${NEXTCLOUD_URL:-}
+      NEXTCLOUD_USER: ${NEXTCLOUD_USER:-}
+      NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD:-}
+      GOTENBERG_URL: http://gotenberg:3000
+      WHISPER_URL: ${WHISPER_URL:-}
+    volumes:
+      - files:/data/files
     ports:
       - "${API_PORT:-3000}:3000"
 
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+
 volumes:
   db-data:
+  files:

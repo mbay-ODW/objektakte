@@ -1,4 +1,9 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { sql } from "drizzle-orm";
+import type { Services } from "../src/adapters/index.js";
+import { LocalStorage } from "../src/adapters/storage.js";
 import { createApp } from "../src/app.js";
 import { createDb, type Database } from "../src/db/client.js";
 import { runMigrations } from "../src/db/migrate.js";
@@ -19,8 +24,23 @@ export async function resetDb(db: Database) {
   await runMigrations(db);
 }
 
-export function testClient(db: Database) {
-  const app = createApp({ db, apiToken: TOKEN });
+/** Test-Dienste: lokale Ablage im Temp-Verzeichnis, Fakes für PDF und Transkription. */
+export function testServices(overrides: Partial<Services> = {}): Services {
+  return {
+    storage: new LocalStorage(mkdtempSync(join(tmpdir(), "objektakte-test-"))),
+    storageBasePath: "/objektakte",
+    pdf: {
+      htmlToPdf: async (html) => new TextEncoder().encode(`%PDF-FAKE\n${html.length}`),
+    },
+    transcriber: {
+      transcribe: async (audio) => `Transkript (${audio.length} Bytes)`,
+    },
+    ...overrides,
+  };
+}
+
+export function testClient(db: Database, services: Services = testServices()) {
+  const app = createApp({ db, apiToken: TOKEN, services });
   const request = async (method: string, path: string, body?: unknown, token = TOKEN) => {
     const res = await app.request(path, {
       method,
@@ -37,6 +57,7 @@ export function testClient(db: Database) {
   };
   return {
     app,
+    services,
     get: (path: string, token?: string) => request("GET", path, undefined, token),
     post: (path: string, body: unknown, token?: string) => request("POST", path, body, token),
     patch: (path: string, body: unknown, token?: string) => request("PATCH", path, body, token),

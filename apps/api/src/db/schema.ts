@@ -287,7 +287,12 @@ export const communications = pgTable(
 // Dokumente (nur Referenzen, die Dateien liegen in der Dateiablage)
 // ---------------------------------------------------------------------------
 
-export const documentStorage = pgEnum("document_storage", ["nextcloud", "paperless", "url"]);
+export const documentStorage = pgEnum("document_storage", [
+  "nextcloud",
+  "paperless",
+  "url",
+  "local",
+]);
 
 export const documents = pgTable(
   "documents",
@@ -568,3 +573,123 @@ export const appSettings = pgTable("app_settings", {
   value: jsonb("value").notNull(),
   ...timestamps,
 });
+
+// ---------------------------------------------------------------------------
+// Begehungen (Vor-Ort-Aufnahme)
+// ---------------------------------------------------------------------------
+
+export const inspectionStatus = pgEnum("inspection_status", ["laufend", "abgeschlossen"]);
+
+/**
+ * IDs von Begehungen, Positionen und Medien werden vom Client (offline) erzeugt; alle
+ * Schreiboperationen sind idempotente PUTs, damit eine Offline-Warteschlange gefahrlos
+ * wiederholt werden kann.
+ */
+export const inspections = pgTable(
+  "inspections",
+  {
+    id: uuid("id").primaryKey(),
+    objectId: uuid("object_id")
+      .notNull()
+      .references(() => objects.id, { onDelete: "restrict" }),
+    caseId: uuid("case_id").references(() => cases.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    status: inspectionStatus("status").notNull().default("laufend"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    /** [{ name, role, contactId? }] */
+    participants: jsonb("participants").notNull().default([]),
+    weather: text("weather"),
+    latitude: numeric("latitude", { precision: 9, scale: 6 }),
+    longitude: numeric("longitude", { precision: 9, scale: 6 }),
+    notes: text("notes"),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
+    contentHash: text("content_hash"),
+    protocolDocumentId: uuid("protocol_document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps,
+  },
+  (t) => [
+    index("inspections_object_idx").on(t.objectId),
+    index("inspections_case_idx").on(t.caseId),
+  ],
+);
+
+export const inspectionCategory = pgEnum("inspection_category", [
+  "gebaeude_allgemein",
+  "aussenwand",
+  "dach",
+  "oberste_geschossdecke",
+  "kellerdecke",
+  "bodenplatte",
+  "fenster",
+  "tueren",
+  "heizung",
+  "warmwasser",
+  "lueftung",
+  "kuehlung",
+  "beleuchtung",
+  "pv_solar",
+  "elektro",
+  "zone",
+  "sonstiges",
+]);
+
+export const itemCondition = pgEnum("item_condition", ["gut", "mittel", "schlecht"]);
+
+export const inspectionItems = pgTable(
+  "inspection_items",
+  {
+    id: uuid("id").primaryKey(),
+    inspectionId: uuid("inspection_id")
+      .notNull()
+      .references(() => inspections.id, { onDelete: "cascade" }),
+    category: inspectionCategory("category").notNull(),
+    label: text("label").notNull(),
+    /** Raum, Zone, Geschoss o. Ä. */
+    location: text("location"),
+    /** Freie Merkmale, z. B. { "material": "Holz", "baujahr": 1985, "uWert": 2.8 } */
+    attributes: jsonb("attributes").notNull().default({}),
+    condition: itemCondition("condition"),
+    notes: text("notes"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    ...timestamps,
+  },
+  (t) => [index("inspection_items_inspection_idx").on(t.inspectionId, t.sortOrder)],
+);
+
+export const mediaKind = pgEnum("media_kind", ["foto", "audio"]);
+export const transcriptStatus = pgEnum("transcript_status", [
+  "keins",
+  "ausstehend",
+  "fertig",
+  "fehler",
+]);
+
+export const inspectionMedia = pgTable(
+  "inspection_media",
+  {
+    id: uuid("id").primaryKey(),
+    inspectionId: uuid("inspection_id")
+      .notNull()
+      .references(() => inspections.id, { onDelete: "cascade" }),
+    itemId: uuid("item_id").references(() => inspectionItems.id, { onDelete: "set null" }),
+    kind: mediaKind("kind").notNull(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "restrict" }),
+    mimeType: text("mime_type").notNull(),
+    caption: text("caption"),
+    takenAt: timestamp("taken_at", { withTimezone: true }),
+    transcriptStatus: transcriptStatus("transcript_status").notNull().default("keins"),
+    transcript: text("transcript"),
+    transcriptError: text("transcript_error"),
+    transcriptAttempts: integer("transcript_attempts").notNull().default(0),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [
+    index("inspection_media_inspection_idx").on(t.inspectionId),
+    index("inspection_media_transcript_idx").on(t.transcriptStatus),
+  ],
+);

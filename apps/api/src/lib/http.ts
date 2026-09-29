@@ -1,10 +1,12 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
+import type { Services } from "../adapters/index.js";
 import type { Database } from "../db/client.js";
 
 export interface AppEnv {
   Variables: {
     db: Database;
     actor: string;
+    services: Services;
   };
 }
 

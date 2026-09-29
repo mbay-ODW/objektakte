@@ -55,6 +55,7 @@ Schemaänderungen: `apps/api/src/db/schema.ts` anpassen, dann `pnpm --filter @ob
 - [Fristen und Förderfälle](docs/fristen.md)
 - [Ereignisse und Webhooks](docs/webhooks.md)
 - [Kommunikation und Zuordnung](docs/kommunikation.md)
+- [Begehung vor Ort](docs/begehung.md)
 
 ## Lizenz
 

@@ -2,14 +2,17 @@ import { timingSafeEqual } from "node:crypto";
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { bearerAuth } from "hono/bearer-auth";
 import { HTTPException } from "hono/http-exception";
+import type { Services } from "./adapters/index.js";
 import type { Database } from "./db/client.js";
 import { DomainError, errorCode } from "./lib/errors.js";
 import type { AppEnv } from "./lib/http.js";
 import { casesRouter } from "./modules/cases/routes.js";
 import { communicationsRouter } from "./modules/communications/routes.js";
 import { contactsRouter } from "./modules/contacts/routes.js";
+import { documentsRouter } from "./modules/documents/routes.js";
 import { fundingRouter } from "./modules/funding/routes.js";
 import { importRouter } from "./modules/import/routes.js";
+import { inspectionsRouter } from "./modules/inspections/routes.js";
 import { createMcpHandler } from "./modules/mcp/server.js";
 import type { OpenApiDocument } from "./modules/mcp/tools.js";
 import { objectsRouter } from "./modules/objects/routes.js";
@@ -19,9 +22,10 @@ import { webhooksRouter } from "./modules/webhooks/routes.js";
 export interface AppOptions {
   db: Database;
   apiToken: string;
+  services: Services;
 }
 
-export function createApp({ db, apiToken }: AppOptions) {
+export function createApp({ db, apiToken, services }: AppOptions) {
   const app = new OpenAPIHono<AppEnv>();
 
   app.get("/health", (c) => c.json({ status: "ok" }));
@@ -55,6 +59,7 @@ export function createApp({ db, apiToken }: AppOptions) {
   );
   api.use("*", async (c, next) => {
     c.set("db", db);
+    c.set("services", services);
     // Bis OIDC angebunden ist, gibt es genau einen technischen Nutzer.
     c.set("actor", "api-token");
     await next();
@@ -64,6 +69,8 @@ export function createApp({ db, apiToken }: AppOptions) {
   api.route("/", casesRouter);
   api.route("/", fundingRouter);
   api.route("/", communicationsRouter);
+  api.route("/", inspectionsRouter);
+  api.route("/", documentsRouter);
   api.route("/", settingsRouter);
   api.route("/", webhooksRouter);
   api.route("/", importRouter);

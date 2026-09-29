@@ -1,0 +1,37 @@
+{
+  "name": "@objektakte/web",
+  "version": "0.1.0",
+  "license": "AGPL-3.0-only",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node build",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "api:types": "pnpm --filter @objektakte/api openapi:export ../web/openapi.json && openapi-typescript openapi.json -o src/lib/api/schema.d.ts && rm openapi.json"
+  },
+  "dependencies": {
+    "idb": "8.0.3",
+    "openapi-fetch": "0.17.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@sveltejs/adapter-node": "5.5.7",
+    "@sveltejs/kit": "2.70.3",
+    "@sveltejs/vite-plugin-svelte": "7.3.1",
+    "@types/node": "22.20.4",
+    "fake-indexeddb": "6.2.5",
+    "openapi-typescript": "7.13.0",
+    "postgres": "3.4.9",
+    "svelte": "5.57.1",
+    "svelte-check": "4.7.6",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

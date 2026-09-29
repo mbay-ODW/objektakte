@@ -6,7 +6,14 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/drizzle/meta"]
+    "includes": [
+      "**",
+      "!**/drizzle/meta",
+      "!**/*.svelte",
+      "!apps/web/src/lib/api/schema.d.ts",
+      "!apps/web/.svelte-kit",
+      "!apps/web/build"
+    ]
   },
   "formatter": {
     "enabled": true,

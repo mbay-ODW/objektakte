@@ -11,7 +11,8 @@
     "format": "biome check --write .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "api:types": "pnpm --filter @objektakte/web api:types"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

@@ -116,3 +116,25 @@ jobs:
       - run: docker build -t objektakte-api .
       - run: docker build -t objektakte-validator validator
       - run: docker build -f apps/web/Dockerfile -t objektakte-web .
+      - name: Images starten (Smoke-Test)
+        run: |
+          docker network create smoke
+          docker run -d --name db --network smoke -e POSTGRES_USER=objektakte -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=objektakte postgres:16
+          docker run -d --name validator --network smoke objektakte-validator
+          until docker exec db pg_isready -U objektakte; do sleep 1; done
+          docker run -d --name api --network smoke -p 3000:3000 \
+            -e DATABASE_URL=postgres://objektakte:smoke@db:5432/objektakte -e API_TOKEN=smoke-token \
+            -e EINVOICE_VALIDATOR_URL=http://validator:8080 objektakte-api
+          docker run -d --name web --network smoke -p 3001:3000 \
+            -e API_URL=http://api:3000 -e API_TOKEN=smoke-token -e WEB_PASSWORD=smoke \
+            -e WEB_SESSION_SECRET=0123456789abcdef0123456789abcdef -e ORIGIN=http://localhost:3001 objektakte-web
+          for c in api web validator; do
+            for i in $(seq 1 60); do
+              [ "$(docker inspect -f '{{.State.Health.Status}}' $c)" = healthy ] && break
+              [ "$(docker inspect -f '{{.State.Running}}' $c)" = true ] || { docker logs $c; exit 1; }
+              sleep 2
+            done
+            [ "$(docker inspect -f '{{.State.Health.Status}}' $c)" = healthy ] || { docker logs $c; exit 1; }
+            echo "$c healthy"
+          done
+          curl -fsS -H 'Authorization: Bearer smoke-token' http://localhost:3000/api/v1/cases > /dev/null

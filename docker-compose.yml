@@ -54,6 +54,8 @@ services:
       ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN setzen}
       # Große Fotos/Sprachnotizen über den Proxy erlauben
       BODY_SIZE_LIMIT: 80M
+      # Nur lokal ohne HTTPS auf "false" setzen
+      WEB_COOKIE_SECURE: ${WEB_COOKIE_SECURE:-}
     ports:
       - "${WEB_PORT:-3001}:3000"
 

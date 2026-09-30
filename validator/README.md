@@ -10,6 +10,6 @@ docker run -p 8080:8080 objektakte-validator
 curl --data-binary @rechnung.pdf http://localhost:8080/validate   # Header X-Validation-Status: valid|invalid
 ```
 
-Ohne Docker (Java 21): `java -cp Mustang-CLI-2.26.0.jar validator/Server.java` (JAR von Maven Central).
+Ohne Docker (JDK 21): `java -cp Mustang-CLI-2.26.0.jar validator/Server.java` (JAR von Maven Central). Das Docker-Image kompiliert `Server.java` beim Bauen vor, weil die JRE im Laufzeit-Image Quelltext nicht direkt starten kann.
 
 objektakte ruft den Dienst beim Festschreiben jeder Rechnung auf (`EINVOICE_VALIDATOR_URL`). Mit `EINVOICE_VALIDATION=required` (Standard) wird ohne bestandene Prüfung nicht festgeschrieben.

@@ -25,5 +25,7 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
-  return EnvSchema.parse(source);
+  // Leere Werte (z. B. `WHISPER_URL=` aus Compose-Defaults) gelten als nicht gesetzt
+  const set = Object.fromEntries(Object.entries(source).filter(([, v]) => v !== ""));
+  return EnvSchema.parse(set);
 }

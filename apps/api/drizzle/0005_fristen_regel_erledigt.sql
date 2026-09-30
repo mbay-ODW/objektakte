@@ -1,0 +1,1 @@
+ALTER TABLE "deadlines" ADD COLUMN "completed_by_rule" boolean DEFAULT false NOT NULL;

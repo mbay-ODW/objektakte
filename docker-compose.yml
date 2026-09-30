@@ -1,0 +1,73 @@
+# Beispiel-Stack (z. B. für Portainer). Werte über .env oder Stack-Variablen setzen.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: objektakte
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD setzen}
+      POSTGRES_DB: objektakte
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U objektakte"]
+      interval: 10s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://objektakte:${POSTGRES_PASSWORD}@db:5432/objektakte
+      API_TOKEN: ${API_TOKEN:?API_TOKEN setzen}
+      PORT: "3000"
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      STORAGE_DIR: /data/files
+      NEXTCLOUD_URL: ${NEXTCLOUD_URL:-}
+      NEXTCLOUD_USER: ${NEXTCLOUD_USER:-}
+      NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD:-}
+      GOTENBERG_URL: http://gotenberg:3000
+      WHISPER_URL: ${WHISPER_URL:-}
+      EINVOICE_VALIDATOR_URL: http://validator:8080
+      EINVOICE_VALIDATION: required
+    volumes:
+      - files:/data/files
+    ports:
+      - "${API_PORT:-3000}:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:3000
+      API_TOKEN: ${API_TOKEN:?API_TOKEN setzen}
+      WEB_PASSWORD: ${WEB_PASSWORD:?WEB_PASSWORD setzen}
+      WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:?WEB_SESSION_SECRET setzen (mind. 32 Zeichen)}
+      # Öffentliche Adresse der Oberfläche (für CSRF-Prüfung und Cookies), z. B. https://akte.example.org
+      ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN setzen}
+      # Große Fotos/Sprachnotizen über den Proxy erlauben
+      BODY_SIZE_LIMIT: 80M
+      # Nur lokal ohne HTTPS auf "false" setzen
+      WEB_COOKIE_SECURE: ${WEB_COOKIE_SECURE:-}
+    ports:
+      - "${WEB_PORT:-3001}:3000"
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+
+  # Prüft E-Rechnungen (EN 16931, XRechnung, ZUGFeRD inkl. PDF/A) vor dem Festschreiben
+  validator:
+    build: ./validator
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  files:

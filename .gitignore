@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+# Lokale Import-Dateien enthalten echte Kundendaten und gehören nie ins Repo
+import-data/
+*.import.json

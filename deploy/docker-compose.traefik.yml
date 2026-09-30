@@ -1,0 +1,117 @@
+# objektakte hinter Traefik (z. B. als Portainer-Stack).
+# Alle instanzspezifischen Werte kommen aus Stack-Variablen – siehe docs/betrieb.md.
+#
+# Pflicht: POSTGRES_PASSWORD, API_TOKEN, WEB_PASSWORD, WEB_SESSION_SECRET, AKTE_HOST, AKTE_API_HOST
+# Images:  standardmäßig ghcr.io/mbay-odw/objektakte-{api,web,validator}:latest
+#          (oder lokal gebaut und per OBJEKTAKTE_IMAGE umbenannt)
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: objektakte
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD setzen}
+      POSTGRES_DB: objektakte
+      TZ: Europe/Berlin
+    volumes:
+      - ${DB_VOLUME:-db-data}:/var/lib/postgresql/data
+    networks: [intern]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U objektakte"]
+      interval: 10s
+      retries: 5
+    mem_limit: 512m
+
+  api:
+    image: ${OBJEKTAKTE_IMAGE:-ghcr.io/mbay-odw/objektakte}-api:${OBJEKTAKTE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      validator:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgres://objektakte:${POSTGRES_PASSWORD}@db:5432/objektakte
+      API_TOKEN: ${API_TOKEN:?API_TOKEN setzen}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      STORAGE_DIR: /data/files
+      STORAGE_BASE_PATH: ${STORAGE_BASE_PATH:-/objektakte}
+      NEXTCLOUD_URL: ${NEXTCLOUD_URL:-}
+      NEXTCLOUD_USER: ${NEXTCLOUD_USER:-}
+      NEXTCLOUD_PASSWORD: ${NEXTCLOUD_PASSWORD:-}
+      GOTENBERG_URL: http://gotenberg:3000
+      WHISPER_URL: ${WHISPER_URL:-}
+      WHISPER_MODEL: ${WHISPER_MODEL:-Systran/faster-whisper-large-v3}
+      WHISPER_API_KEY: ${WHISPER_API_KEY:-}
+      EINVOICE_VALIDATOR_URL: http://validator:8080
+      EINVOICE_VALIDATION: ${EINVOICE_VALIDATION:-required}
+      TZ: Europe/Berlin
+    volumes:
+      - ${FILES_VOLUME:-files}:/data/files
+    networks: [intern, traefik]
+    mem_limit: 512m
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "traefik"
+      traefik.http.services.objektakte-api.loadbalancer.server.port: "3000"
+      traefik.http.routers.objektakte-api.rule: "Host(`${AKTE_API_HOST:?AKTE_API_HOST setzen}`)"
+      traefik.http.routers.objektakte-api.entrypoints: "websecure"
+      traefik.http.routers.objektakte-api.tls: "true"
+      traefik.http.routers.objektakte-api.tls.certresolver: "${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      traefik.http.routers.objektakte-api.service: "objektakte-api"
+      traefik.http.routers.objektakte-api.middlewares: "${API_MIDDLEWARES:-objektakte-headers@docker}"
+
+  web:
+    image: ${OBJEKTAKTE_IMAGE:-ghcr.io/mbay-odw/objektakte}-web:${OBJEKTAKTE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      API_URL: http://api:3000
+      API_TOKEN: ${API_TOKEN}
+      WEB_PASSWORD: ${WEB_PASSWORD:?WEB_PASSWORD setzen}
+      WEB_SESSION_SECRET: ${WEB_SESSION_SECRET:?WEB_SESSION_SECRET setzen (mind. 32 Zeichen)}
+      ORIGIN: https://${AKTE_HOST:?AKTE_HOST setzen}
+      BODY_SIZE_LIMIT: 80M
+      # Traefik setzt X-Forwarded-For; die Anmeldebegrenzung zählt so die echte Client-Adresse
+      ADDRESS_HEADER: X-Forwarded-For
+      XFF_DEPTH: "1"
+      TZ: Europe/Berlin
+    networks: [intern, traefik]
+    mem_limit: 256m
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "traefik"
+      traefik.http.middlewares.objektakte-headers.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.objektakte-headers.headers.contentTypeNosniff: "true"
+      traefik.http.middlewares.objektakte-headers.headers.referrerPolicy: "same-origin"
+      traefik.http.middlewares.objektakte-headers.headers.frameDeny: "true"
+      traefik.http.services.objektakte-web.loadbalancer.server.port: "3000"
+      traefik.http.routers.objektakte-web.rule: "Host(`${AKTE_HOST}`)"
+      traefik.http.routers.objektakte-web.entrypoints: "websecure"
+      traefik.http.routers.objektakte-web.tls: "true"
+      traefik.http.routers.objektakte-web.tls.certresolver: "${TRAEFIK_CERTRESOLVER:-letsencrypt}"
+      traefik.http.routers.objektakte-web.service: "objektakte-web"
+      traefik.http.routers.objektakte-web.middlewares: "${WEB_MIDDLEWARES:-objektakte-headers@docker}"
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    networks: [intern]
+    mem_limit: 1g
+
+  validator:
+    image: ${OBJEKTAKTE_IMAGE:-ghcr.io/mbay-odw/objektakte}-validator:${OBJEKTAKTE_TAG:-latest}
+    restart: unless-stopped
+    networks: [intern]
+    mem_limit: 1g
+
+networks:
+  intern:
+  traefik:
+    external: true
+
+volumes:
+  db-data:
+  files:

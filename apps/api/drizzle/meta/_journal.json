@@ -1,0 +1,97 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1790709241267,
+      "tag": "0000_init",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790709250131,
+      "tag": "0001_events_append_only",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790710124307,
+      "tag": "0002_foerderung_fristen_webhooks",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790710125206,
+      "tag": "0003_seed_foerderprogramme",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790710486666,
+      "tag": "0004_nummernkreise",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790710510103,
+      "tag": "0005_fristen_regel_erledigt",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790710693409,
+      "tag": "0006_kommunikation_zuordnung",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790711052619,
+      "tag": "0007_begehungen",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790711594287,
+      "tag": "0008_bank_zahlungen",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790712591484,
+      "tag": "0009_belege_positionen",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790712608466,
+      "tag": "0010_gobd_festschreibung",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790714422769,
+      "tag": "0011_review_fixes",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790714423838,
+      "tag": "0012_review_fixes_trigger",
+      "breakpoints": true
+    }
+  ]
+}

@@ -124,7 +124,7 @@ jobs:
           until docker exec db pg_isready -U objektakte; do sleep 1; done
           docker run -d --name api --network smoke -p 3000:3000 \
             -e DATABASE_URL=postgres://objektakte:smoke@db:5432/objektakte -e API_TOKEN=smoke-token \
-            -e EINVOICE_VALIDATOR_URL=http://validator:8080 objektakte-api
+            -e EINVOICE_VALIDATOR_URL=http://validator:8080 -e WHISPER_URL= -e NEXTCLOUD_URL= objektakte-api
           docker run -d --name web --network smoke -p 3001:3000 \
             -e API_URL=http://api:3000 -e API_TOKEN=smoke-token -e WEB_PASSWORD=smoke \
             -e WEB_SESSION_SECRET=0123456789abcdef0123456789abcdef -e ORIGIN=http://localhost:3001 objektakte-web

@@ -14,10 +14,13 @@ RUN pnpm --filter @objektakte/web build \
  && cp -r apps/web/build /out/
 
 FROM node:22-alpine
+# Docker-Secrets: NAME_FILE=/run/secrets/... wird beim Start zu NAME geladen
+COPY --chmod=0755 env-secrets.sh /usr/local/bin/env-secrets
 ENV NODE_ENV=production PORT=3000 BODY_SIZE_LIMIT=80M
 WORKDIR /app
 COPY --from=build /out ./
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+ENTRYPOINT ["/usr/local/bin/env-secrets", "docker-entrypoint.sh"]
 CMD ["node", "build"]

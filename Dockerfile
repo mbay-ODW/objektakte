@@ -12,6 +12,8 @@ RUN pnpm --filter @objektakte/api build \
  && cp -r apps/api/dist apps/api/drizzle /out/
 
 FROM node:22-alpine
+# Docker-Secrets: NAME_FILE=/run/secrets/... wird beim Start zu NAME geladen
+COPY --chmod=0755 env-secrets.sh /usr/local/bin/env-secrets
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build /out ./
@@ -19,4 +21,5 @@ RUN mkdir -p /data/files && chown node:node /data/files
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+ENTRYPOINT ["/usr/local/bin/env-secrets", "docker-entrypoint.sh"]
 CMD ["node", "dist/index.js"]

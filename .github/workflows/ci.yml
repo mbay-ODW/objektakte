@@ -138,3 +138,8 @@ jobs:
             echo "$c healthy"
           done
           curl -fsS -H 'Authorization: Bearer smoke-token' http://localhost:3000/api/v1/cases > /dev/null
+          # Validator prüft wirklich (Laufzeitnutzer liest das Mustang-JAR): Bericht statt Hänger
+          printf '<x/>' > /tmp/leer.xml
+          docker run --rm --network smoke -v /tmp/leer.xml:/f.xml:ro curlimages/curl:8.10.1 \
+            -sS -m 120 --data-binary @/f.xml http://validator:8080/validate | tee /tmp/bericht.txt
+          grep -q '<summary' /tmp/bericht.txt || { docker logs validator; exit 1; }

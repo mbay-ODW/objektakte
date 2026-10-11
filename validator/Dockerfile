@@ -6,12 +6,14 @@ ARG MUSTANG_VERSION
 WORKDIR /app
 ADD https://repo1.maven.org/maven2/org/mustangproject/Mustang-CLI/${MUSTANG_VERSION}/Mustang-CLI-${MUSTANG_VERSION}.jar /app/mustang.jar
 COPY Server.java /app/Server.java
+# ADD aus einer URL legt die Datei mit 0600 an; der Laufzeitnutzer muss das JAR lesen können
+RUN chmod 0644 /app/mustang.jar
 # Vorab kompilieren: die JRE im Laufzeit-Image enthält keinen Compiler für den Quelltext-Start
 RUN javac -cp /app/mustang.jar -d /app/classes /app/Server.java
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-COPY --from=build /app/mustang.jar /app/mustang.jar
+COPY --from=build --chmod=0644 /app/mustang.jar /app/mustang.jar
 COPY --from=build /app/classes /app/classes
 RUN useradd --system validator
 USER validator

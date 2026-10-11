@@ -43,8 +43,9 @@ public class Server {
         String status = report.contains("<summary status=\"valid\"/>") && !report.contains("status=\"invalid\"")
             ? "valid" : "invalid";
         respond(ex, 200, "application/xml; charset=utf-8", report, status);
-      } catch (Exception e) {
-        respond(ex, 500, "text/plain", "Prüfung fehlgeschlagen: " + e.getMessage(), null);
+      } catch (Exception | LinkageError e) {
+        // auch Klassenladefehler beantworten, sonst wartet der Aufrufer bis zum Timeout
+        respond(ex, 500, "text/plain", "Prüfung fehlgeschlagen: " + e, null);
       } finally {
         Files.deleteIfExists(file);
       }
